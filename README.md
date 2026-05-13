@@ -75,10 +75,10 @@ AMD EPYC 7B13 (64-core / 128-thread Linux server):
 
 | Operation                  | `sia_reed_solomon` (this) | `reed_solomon_erasure` | `fec_rs`     |
 |----------------------------|---------------------------|------------------------|--------------|
-| `encode`                   | 7.1 GiB/s                 | 392 MiB/s              | **13.5 GiB/s** |
-| `verify`                   | **3.3 GiB/s**             | 326 MiB/s              | 979 MiB/s    |
-| `reconstruct -1 data lost` | **1.2 GiB/s**             | 224 MiB/s              | 824 MiB/s    |
-| `reconstruct -10 data lost`| **4.3 GiB/s**             | 242 MiB/s              | 890 MiB/s    |
+| `encode`                   | 7.6 GiB/s                 | 393 MiB/s              | **16.5 GiB/s** |
+| `verify`                   | **3.6 GiB/s**             | 345 MiB/s              | 1.1 GiB/s    |
+| `reconstruct -1 data lost` | **1.4 GiB/s**             | 201 MiB/s              | 874 MiB/s    |
+| `reconstruct -10 data lost`| **4.9 GiB/s**             | 222 MiB/s              | 813 MiB/s    |
 
 On x86_64, `fec_rs` wins on `encode` (13.5 vs 7.1 GiB/s) because it pulls in
 hand-tuned AVX paths; our scalar implementation is the same speed on both

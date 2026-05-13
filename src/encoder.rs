@@ -143,10 +143,8 @@ impl ReedSolomon {
         self.reconstruct_inner(shards, true)
     }
 
-    /// Shared body of `reconstruct` and `reconstruct_data`. Matches the
-    /// `reconstruct` helper in klauspost's `reedsolomon.go`, minus the
-    /// inversion-tree cache: we recompute the `k × k` submatrix inverse on
-    /// every call.
+    /// Mirrors klauspost's `reconstruct` minus the inversion-tree cache:
+    /// the `k × k` submatrix inverse is recomputed per call.
     fn reconstruct_inner(&self, shards: &mut [Option<Vec<u8>>], data_only: bool) -> Result<()> {
         if shards.len() != self.total_shards() {
             return Err(Error::WrongShardCount {
@@ -269,12 +267,7 @@ const _: () = assert!(
 );
 
 /// `outputs[r] = ∑_c matrix_rows[r][c] · inputs[c]` over GF(2^8).
-///
-/// Cache-blocked translation of klauspost's `codeSomeShards` in
-/// `reedsolomon.go`. Loop order is (block, output_row, input_shard, byte):
-/// one block of every input shard stays hot in L2 across all output rows.
-/// The block-major rayon path replaces klauspost's goroutine fan-out, which
-/// in their code splits work by output row.
+/// Cache-blocked port of klauspost's `codeSomeShards`.
 fn code_some_shards(matrix_rows: &[&[u8]], inputs: &[&[u8]], outputs: Vec<&mut [u8]>) {
     if outputs.is_empty() {
         return;
@@ -288,15 +281,17 @@ fn code_some_shards(matrix_rows: &[&[u8]], inputs: &[&[u8]], outputs: Vec<&mut [
     {
         let n_blocks = len.div_ceil(BLOCK_SIZE);
         let n_threads = rayon::current_num_threads().max(1);
-        // Block-major needs enough blocks to feed every core; otherwise fall
-        // back to one task per output shard so cores don't sit idle.
-        if n_blocks >= n_threads {
-            code_some_shards_blocked_par(matrix_rows, inputs, outputs, len);
-            return;
-        }
-        if outputs.len() > 1 {
-            code_some_shards_rows_par(matrix_rows, inputs, outputs);
-            return;
+        // Skip rayon when per-thread work would be too small to amortize
+        // contention.
+        if n_blocks * outputs.len() >= n_threads * 2 {
+            if n_blocks >= n_threads {
+                code_some_shards_blocked_par(matrix_rows, inputs, outputs, len);
+                return;
+            }
+            if outputs.len() > 1 {
+                code_some_shards_rows_par(matrix_rows, inputs, outputs);
+                return;
+            }
         }
     }
 

@@ -157,9 +157,8 @@ impl Matrix {
         Ok(work.sub_matrix(0, n, n, 2 * n))
     }
 
-    /// In-place Gauss-Jordan over GF(2^8). Matches klauspost's
-    /// `gaussianElimination` in `matrix.go`; XOR replaces subtraction since
-    /// addition and subtraction coincide in characteristic 2.
+    /// In-place Gauss-Jordan over GF(2^8); XOR is subtraction in char 2.
+    /// Matches klauspost's `gaussianElimination`.
     fn gaussian_elimination(&mut self) -> Result<()> {
         let rows = self.rows;
         let cols = self.cols;
