@@ -1,5 +1,10 @@
 //! GF(2^8) with primitive element 2 and generator polynomial 0x11D —
 //! the field klauspost/reedsolomon uses. Tables baked in via `const fn`.
+//!
+//! Translation of the field code in klauspost/reedsolomon's
+//! [`galois.go`](https://github.com/klauspost/reedsolomon/blob/master/galois.go):
+//! `galLogTable` / `galExpTable` initialization, `galMultiply`, `galMulSlice`,
+//! and `galMulSliceXor`.
 
 const GENERATING_POLYNOMIAL: u16 = 0x11D;
 
@@ -19,6 +24,8 @@ const fn build_log_exp() -> ([u8; 256], [u8; 256]) {
         }
         i += 1;
     }
+    // Sentinel: `inv(1)` evaluates `EXP[255 - log[1]] = EXP[255]`. Mirroring
+    // exp[0] = 1 here lets `inv` skip a wrap-around check on the hot path.
     exp[255] = exp[0];
     (log, exp)
 }
@@ -28,7 +35,8 @@ const TABLES: ([u8; 256], [u8; 256]) = build_log_exp();
 pub(crate) const LOG_TABLE: [u8; 256] = TABLES.0;
 pub(crate) const EXP_TABLE: [u8; 256] = TABLES.1;
 
-/// `a * b` in GF(2^8). Zero is handled explicitly since `log(0)` is undefined.
+/// `a * b` in GF(2^8). Matches klauspost's `galMultiply` in `galois.go`.
+/// Zero is handled explicitly since `log(0)` is undefined.
 pub(crate) const fn mul(a: u8, b: u8) -> u8 {
     if a == 0 || b == 0 {
         return 0;
@@ -36,7 +44,9 @@ pub(crate) const fn mul(a: u8, b: u8) -> u8 {
     let la = LOG_TABLE[a as usize] as u16;
     let lb = LOG_TABLE[b as usize] as u16;
     let sum = la + lb;
-    // sum is in [0, 508]; subtract 255 once if it overflows 254. Avoids `%`.
+    // la, lb ∈ [0, 254] so sum ∈ [0, 508]; subtract the multiplicative-group
+    // order (255) once when sum ≥ 255. Equivalent to `sum % 255` but avoids
+    // the division at every multiply.
     let idx = if sum >= 255 { sum - 255 } else { sum };
     EXP_TABLE[idx as usize]
 }
@@ -85,7 +95,8 @@ const fn build_inv_table() -> [u8; 256] {
 
 pub(crate) const INV_TABLE: [u8; 256] = build_inv_table();
 
-/// `a^n` in GF(2^8). Matches `galExp` from klauspost/reedsolomon:
+/// `a^n` in GF(2^8). Matches `galExp` from klauspost/reedsolomon
+/// (`galois.go`):
 ///
 ///   - `a^0 == 1` for all `a` (including `0^0 == 1`).
 ///   - `0^n == 0` for `n > 0`.
@@ -100,18 +111,12 @@ pub(crate) const fn exp(a: u8, n: usize) -> u8 {
         return 0;
     }
     let log_a = LOG_TABLE[a as usize] as usize;
-    // log_a * n can overflow conceptually but `usize` on every target we
-    // support is at least 32 bits; klauspost reduces by subtraction, we do
-    // the same to stay const-fn-friendly.
-    let mut log_r = log_a * n;
-    while log_r >= 255 {
-        log_r -= 255;
-    }
-    EXP_TABLE[log_r]
+    EXP_TABLE[(log_a * n) % 255]
 }
 
-/// `out[i] = MUL_TABLE[coeff][input[i]]`. Used for the first contribution to
-/// a parity shard so we can skip XOR with an undefined buffer.
+/// `out[i] = MUL_TABLE[coeff][input[i]]`. Matches `galMulSlice` from
+/// klauspost's `galois.go`. Used for the first contribution to a parity
+/// shard so we can skip XOR with an undefined buffer.
 #[inline(always)]
 pub(crate) fn mul_slice(coeff: u8, input: &[u8], out: &mut [u8]) {
     debug_assert_eq!(input.len(), out.len());
@@ -121,7 +126,8 @@ pub(crate) fn mul_slice(coeff: u8, input: &[u8], out: &mut [u8]) {
     }
 }
 
-/// `out[i] ^= MUL_TABLE[coeff][input[i]]`. The hot loop of the encoder.
+/// `out[i] ^= MUL_TABLE[coeff][input[i]]`. Matches `galMulSliceXor` from
+/// klauspost's `galois.go`. The hot loop of the encoder.
 #[inline(always)]
 pub(crate) fn mul_slice_xor(coeff: u8, input: &[u8], out: &mut [u8]) {
     debug_assert_eq!(input.len(), out.len());

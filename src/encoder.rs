@@ -1,8 +1,11 @@
 //! Reed-Solomon encoder over GF(2^8) with Cauchy matrix construction.
 //!
-//! Translated from `reedsolomon.go` in Klaus Post's reedsolomon library, but
+//! Translated from
+//! [`reedsolomon.go`](https://github.com/klauspost/reedsolomon/blob/master/reedsolomon.go)
+//! in Klaus Post's reedsolomon library — `New` / `newReedSolomon`, `Encode`,
+//! `Verify`, `Reconstruct` / `reconstruct`, and `codeSomeShards` — but
 //! omitting the streaming API, the inversion-tree cache, and the AVX2/GFNI
-//! assembly paths — Sia uses only the synchronous, in-memory codec.
+//! assembly paths. Sia uses only the synchronous, in-memory codec.
 
 use crate::error::{Error, Result};
 use crate::galois::{mul_slice, mul_slice_xor};
@@ -129,17 +132,21 @@ impl ReedSolomon {
     }
 
     /// Reconstructs all missing (`None`) shards in place. Present shards
-    /// must have matching length.
+    /// must have matching length. Mirrors klauspost's `Reconstruct`.
     pub fn reconstruct(&self, shards: &mut [Option<Vec<u8>>]) -> Result<()> {
         self.reconstruct_inner(shards, false)
     }
 
     /// Like [`reconstruct`](Self::reconstruct) but leaves missing parity
-    /// shards as `None`.
+    /// shards as `None`. Mirrors klauspost's `ReconstructData`.
     pub fn reconstruct_data(&self, shards: &mut [Option<Vec<u8>>]) -> Result<()> {
         self.reconstruct_inner(shards, true)
     }
 
+    /// Shared body of `reconstruct` and `reconstruct_data`. Matches the
+    /// `reconstruct` helper in klauspost's `reedsolomon.go`, minus the
+    /// inversion-tree cache: we recompute the `k × k` submatrix inverse on
+    /// every call.
     fn reconstruct_inner(&self, shards: &mut [Option<Vec<u8>>], data_only: bool) -> Result<()> {
         if shards.len() != self.total_shards() {
             return Err(Error::WrongShardCount {
@@ -262,8 +269,12 @@ const _: () = assert!(
 );
 
 /// `outputs[r] = ∑_c matrix_rows[r][c] · inputs[c]` over GF(2^8).
-/// Loop order is (block, output_row, input_shard, byte): one block of every
-/// input shard stays hot in L2 across all output rows.
+///
+/// Cache-blocked translation of klauspost's `codeSomeShards` in
+/// `reedsolomon.go`. Loop order is (block, output_row, input_shard, byte):
+/// one block of every input shard stays hot in L2 across all output rows.
+/// The block-major rayon path replaces klauspost's goroutine fan-out, which
+/// in their code splits work by output row.
 fn code_some_shards(matrix_rows: &[&[u8]], inputs: &[&[u8]], outputs: Vec<&mut [u8]>) {
     if outputs.is_empty() {
         return;

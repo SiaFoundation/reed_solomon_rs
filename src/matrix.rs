@@ -1,4 +1,8 @@
-//! Row-major matrix over GF(2^8). Translation of `matrix.go` from klauspost.
+//! Row-major matrix over GF(2^8). Translation of
+//! [`matrix.go`](https://github.com/klauspost/reedsolomon/blob/master/matrix.go)
+//! from klauspost — `newMatrix`, `identityMatrix`, `vandermonde`,
+//! `buildMatrix`, `buildMatrixCauchy`, `Multiply`, `Augment`, `SubMatrix`,
+//! `SwapRows`, `Invert`, `gaussianElimination`.
 
 use crate::error::{Error, Result};
 use crate::galois::{INV_TABLE, MUL_TABLE, exp, mul};
@@ -50,7 +54,7 @@ impl Matrix {
 
     /// Identity over the top `k × k`; bottom is `INV_TABLE[r ^ c]`. Cheaper
     /// to build than Vandermonde (no inverse) but produces different parity
-    /// bytes — not wire-compatible.
+    /// bytes — not wire-compatible. Matches klauspost's `buildMatrixCauchy`.
     pub fn cauchy(data_shards: usize, total_shards: usize) -> Self {
         let mut m = Self::zero(total_shards, data_shards);
         for r in 0..total_shards {
@@ -64,18 +68,6 @@ impl Matrix {
             }
         }
         m
-    }
-
-    #[allow(dead_code)]
-    #[inline(always)]
-    pub fn rows(&self) -> usize {
-        self.rows
-    }
-
-    #[allow(dead_code)]
-    #[inline(always)]
-    pub fn cols(&self) -> usize {
-        self.cols
     }
 
     #[inline(always)]
@@ -94,7 +86,6 @@ impl Matrix {
         &self.data[start..start + self.cols]
     }
 
-    #[allow(dead_code)]
     pub fn multiply(&self, other: &Matrix) -> Result<Matrix> {
         if self.cols != other.rows {
             return Err(Error::SingularMatrix);
@@ -154,6 +145,8 @@ impl Matrix {
         self.rows == self.cols
     }
 
+    /// Gauss-Jordan inversion via augmentation with the identity.
+    /// Matches klauspost's `Matrix.Invert`.
     pub fn invert(&self) -> Result<Matrix> {
         if !self.is_square() {
             return Err(Error::SingularMatrix);
@@ -164,6 +157,9 @@ impl Matrix {
         Ok(work.sub_matrix(0, n, n, 2 * n))
     }
 
+    /// In-place Gauss-Jordan over GF(2^8). Matches klauspost's
+    /// `gaussianElimination` in `matrix.go`; XOR replaces subtraction since
+    /// addition and subtraction coincide in characteristic 2.
     fn gaussian_elimination(&mut self) -> Result<()> {
         let rows = self.rows;
         let cols = self.cols;
