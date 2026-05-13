@@ -63,12 +63,12 @@ Verified by:
 Sia 10-of-30 (10 data + 20 parity) on 4 MiB shards, Apple M-series laptop,
 `cargo bench`:
 
-| Operation                  | `reed_solomon` (this) | `reed_solomon_erasure` | `fec_rs`   |
-|----------------------------|-----------------------|------------------------|------------|
-| `encode`                   | **6.0 GiB/s**         | 540 MiB/s              | 5.1 GiB/s  |
-| `verify`                   | **5.5 GiB/s**         | 537 MiB/s              | 555 MiB/s  |
-| `reconstruct -1 data lost` | **3.0 GiB/s**         | 355 MiB/s              | 366 MiB/s  |
-| `reconstruct -10 data lost`| **3.8 GiB/s**         | 357 MiB/s              | 368 MiB/s  |
+| Operation                  | `sia_reed_solomon` (this) | `reed_solomon_erasure` | `fec_rs`   |
+|----------------------------|---------------------------|------------------------|------------|
+| `encode`                   | **6.1 GiB/s**             | 555 MiB/s              | 5.1 GiB/s  |
+| `verify`                   | **5.6 GiB/s**             | 543 MiB/s              | 552 MiB/s  |
+| `reconstruct -1 data lost` | **3.4 GiB/s**             | 360 MiB/s              | 354 MiB/s  |
+| `reconstruct -10 data lost`| **4.1 GiB/s**             | 362 MiB/s              | 359 MiB/s  |
 
 The ~11× edge over `reed_solomon_erasure` (the encoder `sia_storage` currently
 uses) comes from two layered wins:
