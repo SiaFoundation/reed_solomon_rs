@@ -13,7 +13,7 @@ jobs:
   test:
     runs-on: tenki-standard-medium-4c-8g
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - name: Setup Environment
         run: |
           rustup update stable
