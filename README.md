@@ -1,4 +1,4 @@
-# sia_reed_solomon
+# Reed Solomon
 
 Reed-Solomon erasure coding over GF(2^8) for the Sia SDK.
 
