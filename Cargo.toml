@@ -1,0 +1,45 @@
+[package]
+name = "sia_reed_solomon"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.90"
+repository = "https://github.com/SiaFoundation/reed_solomon_rs"
+license = "MIT"
+description = "Reed-Solomon erasure coding over GF(2^8), translated from Klaus Post's reedsolomon Go library"
+authors = ["The Sia Foundation"]
+categories = ["algorithms", "encoding"]
+keywords = ["reed-solomon", "erasure-coding", "galois", "sia"]
+readme = "README.md"
+exclude = ["knope.toml", ".changeset/*", ".github/*"]
+
+[lib]
+path = "src/lib.rs"
+bench = false
+
+[features]
+default = ["parallel"]
+# Cross-shard and intra-shard parallelism via rayon. Disable for WASM targets
+# where threads aren't available.
+parallel = ["dep:rayon"]
+
+[dependencies]
+thiserror = "2.0.18"
+rayon = { version = "1.11", optional = true }
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+rand = "0.10.1"
+getrandom = "0.4"
+# Used by the comparison benchmark (same version sia_storage currently uses,
+# so bench numbers reflect what would actually change at the call site) AND
+# by the cross-implementation equivalence test that proves we produce
+# bit-identical parity bytes to Sia's existing encoder.
+reed-solomon-erasure = "6.0.0"
+# Another GF(2^8)+poly-0x1D, WASM-compatible erasure crate. Enable the
+# parallel/rayon features so the comparison isn't lopsided by our own
+# rayon parallelism.
+fec-rs = { version = "0.1.0", features = ["parallel", "rayon"] }
+
+[[bench]]
+name = "reed_solomon"
+harness = false

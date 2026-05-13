@@ -1,0 +1,41 @@
+name: Release
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [master]
+
+permissions:
+  contents: write
+
+
+jobs:
+  release:
+    if: github.head_ref == 'release' && github.event.pull_request.merged == true
+    runs-on: tenki-standard-medium-4c-8g
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Setup Environment
+        run: |
+          rustup update stable
+          cargo install knope
+      - name: Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: knope release
+      - name: Publish Crate
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_API_KEY }}
+        run: |
+          output=$(cargo publish -p sia_reed_solomon --registry crates-io 2>&1) && {
+            echo "Published sia_reed_solomon"
+          } || {
+            if echo "$output" | grep -q "already exists"; then
+              echo "Skipping sia_reed_solomon (already published)"
+            else
+              echo "$output" >&2
+              exit 1
+            fi
+          }

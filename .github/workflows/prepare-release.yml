@@ -1,0 +1,37 @@
+name: Prepare Release
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  prepare-release:
+    if: "!contains(github.event.head_commit.message, 'chore: prepare releases')" # Skip merges from releases
+    runs-on: tenki-standard-medium-4c-8g
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Setup Knope
+        uses: knope-dev/action@8055388a38df33f0603050415ac3d8175d6b566f
+      - name: Prepare Release
+        id: prepare
+        run: knope prepare-release --verbose
+        continue-on-error: true
+      - name: Create Pull Request
+        if: steps.prepare.outcome == 'success'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          delete-branch: true
+          commit-message: "chore: prepare releases"
+          title: Release Versions
+          base: master
+          branch: release
+          body: |
+            This PR was automatically created to prepare the release versions. Close the PR when you are ready to release. See the changelog for more details.

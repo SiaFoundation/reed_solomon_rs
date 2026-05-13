@@ -1,0 +1,42 @@
+name: Main
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: tenki-standard-medium-4c-8g
+    steps:
+      - uses: actions/checkout@v5
+      - name: Setup Environment
+        run: |
+          rustup update stable
+          rustup toolchain install nightly
+          rustup target add wasm32-unknown-unknown
+          rustup component add rustfmt --toolchain nightly
+      - name: Rustfmt
+        run: cargo +nightly fmt --all -- --check
+      - name: Clippy
+        run: |
+          cargo clippy --all-targets --all-features -- -D warnings
+          cargo check --all-features
+      - name: Clippy (wasm, no default features)
+        # `parallel` (rayon) is disabled on WASM; make sure the crate still
+        # builds cleanly for `wasm32-unknown-unknown` without it.
+        run: cargo clippy --target wasm32-unknown-unknown --lib --no-default-features -- -D warnings
+      - name: Build docs
+        run: cargo doc --all-features --no-deps
+        env:
+          RUSTDOCFLAGS: "-D warnings"
+      - name: Build benches
+        run: cargo build --benches
+      - name: Test
+        run: cargo test --all-features
+      - name: Test (no default features)
+        run: cargo test --no-default-features
