@@ -60,8 +60,9 @@ Verified by:
 
 ## Benchmarks
 
-Sia 10-of-30 (10 data + 20 parity) on 4 MiB shards, Apple M-series laptop,
-`cargo bench`:
+Sia 10-of-30 (10 data + 20 parity) on 4 MiB shards, `cargo bench`.
+
+Apple M-series laptop:
 
 | Operation                  | `sia_reed_solomon` (this) | `reed_solomon_erasure` | `fec_rs`   |
 |----------------------------|---------------------------|------------------------|------------|
@@ -69,6 +70,21 @@ Sia 10-of-30 (10 data + 20 parity) on 4 MiB shards, Apple M-series laptop,
 | `verify`                   | **5.6 GiB/s**             | 543 MiB/s              | 552 MiB/s  |
 | `reconstruct -1 data lost` | **3.4 GiB/s**             | 360 MiB/s              | 354 MiB/s  |
 | `reconstruct -10 data lost`| **4.1 GiB/s**             | 362 MiB/s              | 359 MiB/s  |
+
+AMD EPYC 7B13 (64-core / 128-thread Linux server):
+
+| Operation                  | `sia_reed_solomon` (this) | `reed_solomon_erasure` | `fec_rs`     |
+|----------------------------|---------------------------|------------------------|--------------|
+| `encode`                   | 7.1 GiB/s                 | 392 MiB/s              | **13.5 GiB/s** |
+| `verify`                   | **3.3 GiB/s**             | 326 MiB/s              | 979 MiB/s    |
+| `reconstruct -1 data lost` | **1.2 GiB/s**             | 224 MiB/s              | 824 MiB/s    |
+| `reconstruct -10 data lost`| **4.3 GiB/s**             | 242 MiB/s              | 890 MiB/s    |
+
+On x86_64, `fec_rs` wins on `encode` (13.5 vs 7.1 GiB/s) because it pulls in
+hand-tuned AVX paths; our scalar implementation is the same speed on both
+boxes per-core, so the EPYC advantage comes from `rayon` fanning across more
+cores. `fec_rs` loses that lead on the other operations, where this crate's
+cache-blocked layout dominates.
 
 The ~11× edge over `reed_solomon_erasure` (the encoder `sia_storage` currently
 uses) comes from two layered wins:
