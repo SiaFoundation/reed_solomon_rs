@@ -5,6 +5,10 @@ on:
     branches:
       - main
   pull_request:
+  schedule:
+    # 04:07 UTC daily. Offset a few minutes off the top of the hour to avoid
+    # the GitHub-wide cron stampede.
+    - cron: '7 4 * * *'
 
 permissions:
   contents: read
@@ -37,6 +41,72 @@ jobs:
       - name: Build benches
         run: cargo build --benches
       - name: Test
-        run: cargo test --all-features
-      - name: Test (no default features)
+        run: cargo test
+      - name: Test (no SIMD)
+        run: cargo test --no-default-features --features=parallel
+      - name: Test (no parallel or SIMD)
         run: cargo test --no-default-features
+
+  # Exercises each SIMD backend on a runner whose CPU actually has the feature.
+  # Without the per-feature confirmation step, a runner pool drift (e.g. AWS
+  # swapping the underlying instance) could silently make the relevant path
+  # untested even though `cargo test` passes.
+  simd:
+    name: SIMD (${{ matrix.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Skylake-SP / Zen 2-3 era: AVX2 yes, GFNI no.
+          - name: AVX2
+            slug: avx2
+            runner: runs-on=${{ github.run_id }}/family=c5/image=ubuntu24-full-x64
+            arch: x86_64
+            require: avx2
+            disallow: gfni
+          # Sapphire Rapids: has AVX2 + GFNI; dispatcher picks GFNI.
+          - name: GFNI
+            slug: gfni
+            runner: runs-on=${{ github.run_id }}/family=c7i/image=ubuntu24-full-x64
+            arch: x86_64
+            require: gfni
+            disallow: ""
+          # Graviton 4: second aarch64 data point.
+          - name: NEON (Graviton 4)
+            slug: neon-g4
+            runner: runs-on=${{ github.run_id }}/family=c8g/image=ubuntu24-full-arm64
+            arch: aarch64
+            require: asimd
+            disallow: ""
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Confirm CPU features
+        run: |
+          set -e
+          echo "uname: $(uname -a)"
+          grep -m1 -E 'model name|Hardware|Model' /proc/cpuinfo || true
+          if [ "${{ matrix.arch }}" = "x86_64" ]; then
+            features=$(grep -m1 '^flags' /proc/cpuinfo | sed 's/.*: //')
+          else
+            features=$(grep -m1 '^Features' /proc/cpuinfo | sed 's/.*: //')
+          fi
+          echo "Detected features: $features"
+          if ! echo " $features " | grep -qw "${{ matrix.require }}"; then
+            echo "FAIL: required CPU feature '${{ matrix.require }}' not present on this runner"
+            exit 1
+          fi
+          echo "OK: '${{ matrix.require }}' present"
+          if [ -n "${{ matrix.disallow }}" ]; then
+            if echo " $features " | grep -qw "${{ matrix.disallow }}"; then
+              echo "FAIL: runner has '${{ matrix.disallow }}'; dispatcher would skip the path under test"
+              exit 1
+            fi
+            echo "OK: '${{ matrix.disallow }}' absent"
+          fi
+      - name: Setup Rust
+        run: rustup update stable
+      - name: Test
+        run: cargo test
+      - name: Test (SIMD off)
+        run: cargo test --no-default-features --features parallel

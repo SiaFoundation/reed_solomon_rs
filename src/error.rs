@@ -18,7 +18,7 @@ pub enum Error {
     TooFewShards { present: usize, needed: usize },
 
     /// Should never happen with a well-formed encoding matrix.
-    #[error("submatrix is singular — this is a bug, please report it")]
+    #[error("submatrix is singular; this is a bug, please report it")]
     SingularMatrix,
 }
 

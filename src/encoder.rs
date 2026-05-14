@@ -1,11 +1,8 @@
-//! Reed-Solomon encoder over GF(2^8) with Cauchy matrix construction.
-//!
-//! Translated from
-//! [`reedsolomon.go`](https://github.com/klauspost/reedsolomon/blob/master/reedsolomon.go)
-//! in Klaus Post's reedsolomon library — `New` / `newReedSolomon`, `Encode`,
-//! `Verify`, `Reconstruct` / `reconstruct`, and `codeSomeShards` — but
-//! omitting the streaming API, the inversion-tree cache, and the AVX2/GFNI
-//! assembly paths. Sia uses only the synchronous, in-memory codec.
+//! Reed-Solomon encoder over GF(2^8). Translated from `New`, `Encode`,
+//! `Verify`, `Reconstruct`, and `codeSomeShards` in klauspost's
+//! [`reedsolomon.go`](https://github.com/klauspost/reedsolomon/blob/master/reedsolomon.go).
+//! Omits the streaming API and the inversion-tree cache; Sia only needs the
+//! synchronous, in-memory codec.
 
 use crate::error::{Error, Result};
 use crate::galois::{mul_slice, mul_slice_xor};
@@ -20,8 +17,7 @@ pub struct ReedSolomon {
 }
 
 impl ReedSolomon {
-    /// Creates a new encoder using a Vandermonde encoding matrix —
-    /// wire-compatible with klauspost/reedsolomon's default `New()`.
+    /// Vandermonde encoding matrix. Wire-compatible with klauspost's `New()`.
     pub fn new(data_shards: usize, parity_shards: usize) -> Result<Self> {
         let total = check_counts(data_shards, parity_shards)?;
         Ok(Self::with_matrix(
@@ -31,9 +27,8 @@ impl ReedSolomon {
         ))
     }
 
-    /// Creates a new encoder using a Cauchy encoding matrix. Same algebraic
-    /// guarantees as `new`, different parity bytes — not wire-compatible
-    /// with klauspost's default.
+    /// Cauchy encoding matrix. Same algebraic guarantees as [`new`](Self::new)
+    /// but produces different parity bytes; not wire-compatible.
     pub fn new_cauchy(data_shards: usize, parity_shards: usize) -> Result<Self> {
         let total = check_counts(data_shards, parity_shards)?;
         Ok(Self::with_matrix(
@@ -143,8 +138,8 @@ impl ReedSolomon {
         self.reconstruct_inner(shards, true)
     }
 
-    /// Mirrors klauspost's `reconstruct` minus the inversion-tree cache:
-    /// the `k × k` submatrix inverse is recomputed per call.
+    /// Mirrors klauspost's `reconstruct` without the inversion-tree cache:
+    /// the k-by-k submatrix inverse is recomputed on every call.
     fn reconstruct_inner(&self, shards: &mut [Option<Vec<u8>>], data_only: bool) -> Result<()> {
         if shards.len() != self.total_shards() {
             return Err(Error::WrongShardCount {
@@ -186,10 +181,9 @@ impl ReedSolomon {
         }
 
         if data_missing {
-            // Pick any `data_shards` present rows of the encoding matrix to
-            // form a square `k × k` block, invert it; the inverse rows are
-            // the coefficient vectors that recover each data shard from the
-            // present shards.
+            // Take k present rows of the encoding matrix, invert that k-by-k
+            // block; each row of the inverse is the coefficient vector that
+            // recovers one missing data shard.
             let mut sub = Matrix::zero(self.data_shards, self.data_shards);
             let mut sub_indices = Vec::with_capacity(self.data_shards);
             for (i, shard) in shards.iter().enumerate() {
@@ -257,17 +251,16 @@ impl ReedSolomon {
     }
 }
 
-/// Working-set block. Sized so one block × all-shards plus `MUL_TABLE` fits
-/// in L2 on the consumer CPUs we target; must be a multiple of the 64-byte
-/// cacheline.
+/// Working-set block. Sized to fit one block per shard plus MUL_TABLE in L2;
+/// must be a multiple of the 64-byte cacheline.
 const BLOCK_SIZE: usize = 32 * 1024;
 const _: () = assert!(
     BLOCK_SIZE.is_multiple_of(64),
     "BLOCK_SIZE must be a multiple of 64"
 );
 
-/// `outputs[r] = ∑_c matrix_rows[r][c] · inputs[c]` over GF(2^8).
-/// Cache-blocked port of klauspost's `codeSomeShards`.
+/// Cache-blocked port of klauspost's `codeSomeShards`. For each output row r,
+/// outputs[r] = sum over c of matrix_rows[r][c] * inputs[c] in GF(2^8).
 fn code_some_shards(matrix_rows: &[&[u8]], inputs: &[&[u8]], outputs: Vec<&mut [u8]>) {
     if outputs.is_empty() {
         return;
@@ -281,22 +274,17 @@ fn code_some_shards(matrix_rows: &[&[u8]], inputs: &[&[u8]], outputs: Vec<&mut [
     {
         let n_blocks = len.div_ceil(BLOCK_SIZE);
         let n_threads = rayon::current_num_threads().max(1);
-        // Skip rayon when per-thread work would be too small to amortize
-        // contention.
-        if n_blocks * outputs.len() >= n_threads * 2 {
-            if n_blocks >= n_threads {
-                code_some_shards_blocked_par(matrix_rows, inputs, outputs, len);
-                return;
-            }
-            if outputs.len() > 1 {
-                code_some_shards_rows_par(matrix_rows, inputs, outputs);
-                return;
-            }
+        if n_blocks >= n_threads {
+            code_some_shards_blocked_par(matrix_rows, inputs, outputs, len);
+            return;
+        }
+        // Row-major fallback when blocks alone don't fill the thread pool.
+        if outputs.len() > 1 && n_blocks * outputs.len() >= n_threads * 2 {
+            code_some_shards_rows_par(matrix_rows, inputs, outputs);
+            return;
         }
     }
 
-    // Sequential fallback: still block-ordered so the same cache-locality
-    // win applies on single-core builds.
     code_some_shards_blocked_seq(matrix_rows, inputs, outputs, len);
 }
 
@@ -345,8 +333,8 @@ fn code_some_shards_blocked_par(
     let n_blocks = len.div_ceil(BLOCK_SIZE);
     let n_outputs = outputs.len();
 
-    // Transpose to [block_idx][output_idx] so each rayon task owns one
-    // block's worth of every output shard.
+    // Transpose to [block][output] so each rayon task owns one block of every
+    // output shard.
     let mut chunked: Vec<Vec<&mut [u8]>> = (0..n_blocks)
         .map(|_| Vec::with_capacity(n_outputs))
         .collect();
@@ -367,8 +355,8 @@ fn code_some_shards_blocked_par(
         });
 }
 
-/// Processes one cache-friendly block. Callers pre-slice so every input
-/// and output here has the same length.
+/// Process one block. Callers pre-slice so every input and output here has
+/// the same length.
 #[inline(always)]
 fn process_block(matrix_rows: &[&[u8]], inputs: &[&[u8]], outputs: &mut [&mut [u8]]) {
     for (r, out_chunk) in outputs.iter_mut().enumerate() {
@@ -432,15 +420,8 @@ mod tests {
             .collect()
     }
 
-    /// Golden test ported verbatim from klauspost/reedsolomon's `TestOneEncode`
-    /// (reedsolomon_test.go). New(5, 5) with the default Vandermonde matrix
-    /// must produce these exact parity bytes; if anything changes — field
-    /// construction, matrix algorithm, multiplication tables — this test
-    /// will catch it.
-    ///
-    /// This test is also the definitive proof that our encoder is wire-
-    /// compatible with klauspost-encoded data (and therefore Sia's existing
-    /// network slabs, which use the same defaults via reed-solomon-erasure).
+    // Verbatim port of klauspost's
+    // [`TestOneEncode`](https://github.com/klauspost/reedsolomon/blob/master/reedsolomon_test.go).
     #[test]
     fn klauspost_one_encode_golden() {
         let rs = ReedSolomon::new(5, 5).unwrap();
@@ -457,7 +438,6 @@ mod tests {
             vec![0, 0],
         ];
         rs.encode(&mut shards).unwrap();
-        // Values lifted verbatim from klauspost/reedsolomon TestOneEncode.
         assert_eq!(shards[5], vec![12, 13], "parity shard 0 (#5) mismatch");
         assert_eq!(shards[6], vec![10, 11], "parity shard 1 (#6) mismatch");
         assert_eq!(shards[7], vec![14, 15], "parity shard 2 (#7) mismatch");
@@ -484,18 +464,37 @@ mod tests {
     #[test]
     fn verify_fails_after_corruption() {
         let rs = ReedSolomon::new(4, 3).unwrap();
-        let mut shards: Vec<Vec<u8>> = (0..7)
+        const TOTAL: usize = 7;
+        const SIZE: usize = 32;
+        let mut shards: Vec<Vec<u8>> = (0..TOTAL)
             .map(|i| {
                 if i < 4 {
-                    rand_shard(i + 1, 64)
+                    rand_shard((i + 1) as u8, SIZE)
                 } else {
-                    vec![0u8; 64]
+                    vec![0u8; SIZE]
                 }
             })
             .collect();
         rs.encode(&mut shards).unwrap();
-        shards[2][5] ^= 0xFF;
-        assert!(!rs.verify(&shards).unwrap());
+        assert!(
+            rs.verify(&shards).unwrap(),
+            "freshly encoded shards must verify"
+        );
+
+        for shard_idx in 0..TOTAL {
+            for byte_idx in 0..SIZE {
+                shards[shard_idx][byte_idx] ^= 0xFF;
+                assert!(
+                    !rs.verify(&shards).unwrap(),
+                    "verify accepted corruption at shard={shard_idx} byte={byte_idx}"
+                );
+                shards[shard_idx][byte_idx] ^= 0xFF;
+            }
+        }
+        assert!(
+            rs.verify(&shards).unwrap(),
+            "unflipped shards must still verify"
+        );
     }
 
     #[test]

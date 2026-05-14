@@ -1,0 +1,21 @@
+[package]
+name = "sia_reed_solomon_comparisons"
+version = "0.0.0"
+edition = "2024"
+publish = false
+description = "Cross-crate Reed-Solomon benchmarks (not published)"
+
+[lib]
+path = "src/lib.rs"
+bench = false
+
+[dev-dependencies]
+sia_reed_solomon = { path = ".." }
+reed-solomon-erasure = "6.0.0"
+fec-rs = { version = "0.1.0", features = ["parallel", "rayon"] }
+criterion = { version = "0.8.2", features = ["html_reports"] }
+rand = "0.10.1"
+
+[[bench]]
+name = "comparisons"
+harness = false
