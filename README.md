@@ -45,50 +45,47 @@ sia_reed_solomon = { version = "...", default-features = false }
 
 ## Benchmarks
 
-10 data + 20 parity, 4 MiB shards, `cargo bench`. SIMD column is the default
-build; scalar is `--no-default-features --features parallel`.
+10 data + 20 parity, 4 MiB shards, on AWS `*.4xlarge` spot runners (16 vCPU
+each). SIMD is the default build; "no SIMD" is `--no-default-features --features
+parallel`.
 
-### Apple M-series (NEON)
+### Throughput
 
-| Operation                  | SIMD        | scalar     | speedup |
-|----------------------------|-------------|------------|---------|
-| `encode`                   | 61.9 GiB/s  | 6.3 GiB/s  | 9.8x    |
-| `verify`                   | 29.8 GiB/s  | 5.8 GiB/s  | 5.1x    |
-| `reconstruct -1 data lost` | 110.6 GiB/s | 34.2 GiB/s | 3.2x    |
-| `reconstruct -10 data lost`| 31.3 GiB/s  | 4.1 GiB/s  | 7.6x    |
-
-### AMD EPYC 7B13 (AVX2)
-
-| Operation                  | SIMD       | scalar    | speedup |
-|----------------------------|------------|-----------|---------|
-| `encode`                   | 24.4 GiB/s | 6.8 GiB/s | 3.6x    |
-| `verify`                   | 4.3 GiB/s  | 3.2 GiB/s | 1.3x    |
-| `reconstruct -1 data lost` | 7.9 GiB/s  | 1.8 GiB/s | 4.3x    |
-| `reconstruct -10 data lost`| 4.4 GiB/s  | 3.4 GiB/s | 1.3x    |
+| Operation                  | AVX2 (c5.4xlarge) | GFNI (c7i.4xlarge) | NEON (c7g.4xlarge) | no SIMD (c7i.4xlarge) |
+|----------------------------|-------------------|--------------------|--------------------|----------------------|
+| `encode`                   | 20.1 GiB/s        | 26.5 GiB/s         | 28.2 GiB/s         | 3.4 GiB/s            |
+| `verify`                   | 4.0 GiB/s         | 4.7 GiB/s          | 6.0 GiB/s          | 2.1 GiB/s            |
+| `reconstruct -1 data lost` | 34.3 GiB/s        | 33.5 GiB/s         | 60.1 GiB/s         | 13.4 GiB/s           |
+| `reconstruct -10 data lost`| 6.6 GiB/s         | 8.3 GiB/s          | 10.6 GiB/s         | 2.0 GiB/s            |
 
 ### Comparisons
 
-This crate against `reed_solomon_erasure` (what `sia_storage` currently uses),
-`fec_rs` (another GF(2^8) Rust crate), and klauspost/reedsolomon (the Go
-library this crate ports) on the same hardware.
+c5.4xlarge (AVX2):
 
-Apple M-series (NEON):
+| Operation                  | this       | klauspost (Go) | reed_solomon_erasure | fec_rs    |
+|----------------------------|------------|----------------|----------------------|-----------|
+| `encode`                   | 20.1 GiB/s | 34.3 GiB/s     | 356 MiB/s            | 5.6 GiB/s |
+| `verify`                   | 4.0 GiB/s  | 3.7 GiB/s      | 304 MiB/s            | 715 MiB/s |
+| `reconstruct -1 data lost` | 34.3 GiB/s | 23.4 GiB/s     | 2.1 GiB/s            | 5.2 GiB/s |
+| `reconstruct -10 data lost`| 6.6 GiB/s  | 3.2 GiB/s      | 212 MiB/s            | 530 MiB/s |
 
-| Operation                  | this        | klauspost (Go) | reed_solomon_erasure | fec_rs    |
-|----------------------------|-------------|----------------|----------------------|-----------|
-| `encode`                   | 61.9 GiB/s  | 43.8 GiB/s     | 555 MiB/s            | 5.1 GiB/s |
-| `verify`                   | 29.8 GiB/s  | 30.1 GiB/s     | 543 MiB/s            | 552 MiB/s |
-| `reconstruct -1 data lost` | 110.6 GiB/s | 120.0 GiB/s    | 3.5 GiB/s            | 3.5 GiB/s |
-| `reconstruct -10 data lost`| 31.3 GiB/s  | 27.6 GiB/s     | 362 MiB/s            | 359 MiB/s |
+c7i.4xlarge (GFNI):
 
-AMD EPYC 7B13 (AVX2):
+| Operation                  | this       | klauspost (Go) | reed_solomon_erasure | fec_rs    |
+|----------------------------|------------|----------------|----------------------|-----------|
+| `encode`                   | 26.5 GiB/s | 57.8 GiB/s     | 566 MiB/s            | 8.1 GiB/s |
+| `verify`                   | 4.7 GiB/s  | 5.2 GiB/s      | 473 MiB/s            | 990 MiB/s |
+| `reconstruct -1 data lost` | 33.5 GiB/s | 22.2 GiB/s     | 3.3 GiB/s            | 6.7 GiB/s |
+| `reconstruct -10 data lost`| 8.3 GiB/s  | 6.4 GiB/s      | 341 MiB/s            | 846 MiB/s |
 
-| Operation                  | this       | klauspost (Go) | reed_solomon_erasure | fec_rs     |
-|----------------------------|------------|----------------|----------------------|------------|
-| `encode`                   | 23.3 GiB/s | 29.5 GiB/s     | 393 MiB/s            | 13.4 GiB/s |
-| `verify`                   | 3.7 GiB/s  | 4.7 GiB/s      | 331 MiB/s            | 1.0 GiB/s  |
-| `reconstruct -1 data lost` | 7.7 GiB/s  | 29.5 GiB/s     | 2.2 GiB/s            | 7.6 GiB/s  |
-| `reconstruct -10 data lost`| 5.0 GiB/s  | 5.1 GiB/s      | 226 MiB/s            | 817 MiB/s  |
+c7g.4xlarge (NEON, Graviton 3):
+
+| Operation                  | this       | klauspost (Go) | reed_solomon_erasure | fec_rs    |
+|----------------------------|------------|----------------|----------------------|-----------|
+| `encode`                   | 28.2 GiB/s | 49.3 GiB/s     | 267 MiB/s            | 2.6 GiB/s |
+| `verify`                   | 6.0 GiB/s  | 13.5 GiB/s     | 248 MiB/s            | 248 MiB/s |
+| `reconstruct -1 data lost` | 60.1 GiB/s | 75.6 GiB/s     | 1.7 GiB/s            | 1.7 GiB/s |
+| `reconstruct -10 data lost`| 10.6 GiB/s | 18.1 GiB/s     | 169 MiB/s            | 169 MiB/s |
 
 Rust benches live in [comparisons/](comparisons/) (`cargo bench -p
 sia_reed_solomon_comparisons`). The klauspost Go bench is in
