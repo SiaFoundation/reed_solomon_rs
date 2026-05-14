@@ -12,23 +12,26 @@ jobs:
     name: ${{ matrix.name }}
     strategy:
       fail-fast: false
+      # Serialize: 4xlarge is 16 vCPU; three in parallel (48) would exceed
+      # the account's 32-vCPU on-demand quota and leave one job to fail.
+      max-parallel: 1
       matrix:
         include:
           # Skylake-SP: AVX2 yes, GFNI no.
-          - name: AVX2 (c5.12xlarge)
-            slug: avx2-c5-12xlarge
-            runner: runs-on=${{ github.run_id }}/family=c5.12xlarge/image=ubuntu24-full-x64
+          - name: AVX2 (c5.4xlarge)
+            slug: avx2-c5-4xlarge
+            runner: runs-on=${{ github.run_id }}/family=c5.4xlarge/image=ubuntu24-full-x64
             scalar: false
           # Sapphire Rapids: AVX2 + GFNI; dispatcher picks GFNI. Scalar
           # baseline runs here only — one reference point is enough.
-          - name: GFNI (c7i.12xlarge)
-            slug: gfni-c7i-12xlarge
-            runner: runs-on=${{ github.run_id }}/family=c7i.12xlarge/image=ubuntu24-full-x64
+          - name: GFNI (c7i.4xlarge)
+            slug: gfni-c7i-4xlarge
+            runner: runs-on=${{ github.run_id }}/family=c7i.4xlarge/image=ubuntu24-full-x64
             scalar: true
           # Graviton 3: aarch64 NEON.
-          - name: NEON (c7g.12xlarge)
-            slug: neon-c7g-12xlarge
-            runner: runs-on=${{ github.run_id }}/family=c7g.12xlarge/image=ubuntu24-full-arm64
+          - name: NEON (c7g.4xlarge)
+            slug: neon-c7g-4xlarge
+            runner: runs-on=${{ github.run_id }}/family=c7g.4xlarge/image=ubuntu24-full-arm64
             scalar: false
     runs-on: ${{ matrix.runner }}
     steps:
