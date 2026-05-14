@@ -1,8 +1,8 @@
-//! Row-major matrix over GF(2^8). Translation of
-//! [`matrix.go`](https://github.com/klauspost/reedsolomon/blob/master/matrix.go)
-//! from klauspost — `newMatrix`, `identityMatrix`, `vandermonde`,
-//! `buildMatrix`, `buildMatrixCauchy`, `Multiply`, `Augment`, `SubMatrix`,
-//! `SwapRows`, `Invert`, `gaussianElimination`.
+//! Row-major matrix over GF(2^8). Ports `newMatrix`, `identityMatrix`,
+//! `vandermonde`, `buildMatrix`, `buildMatrixCauchy`, `Multiply`, `Augment`,
+//! `SubMatrix`, `SwapRows`, `Invert`, and `gaussianElimination` from
+//! klauspost/reedsolomon's
+//! [`matrix.go`](https://github.com/klauspost/reedsolomon/blob/master/matrix.go).
 
 use crate::error::{Error, Result};
 use crate::galois::{INV_TABLE, MUL_TABLE, exp, mul};
@@ -32,9 +32,10 @@ impl Matrix {
         m
     }
 
-    /// `V · T⁻¹` where `V[r][c] = r^c` and `T` is the top `k × k` square of
-    /// `V`. Top of the result is identity; bottom is the parity coefficients.
-    /// Matches klauspost's `buildMatrix`.
+    /// klauspost's [`buildMatrix`]: Vandermonde times the inverse of its own
+    /// top k-by-k block, so the result has identity on top.
+    ///
+    /// [`buildMatrix`]: https://github.com/klauspost/reedsolomon/blob/master/matrix.go
     pub fn vandermonde_encoding(data_shards: usize, total_shards: usize) -> Result<Self> {
         let v = Self::vandermonde_raw(total_shards, data_shards);
         let top = v.sub_matrix(0, 0, data_shards, data_shards);
@@ -52,9 +53,11 @@ impl Matrix {
         m
     }
 
-    /// Identity over the top `k × k`; bottom is `INV_TABLE[r ^ c]`. Cheaper
-    /// to build than Vandermonde (no inverse) but produces different parity
-    /// bytes — not wire-compatible. Matches klauspost's `buildMatrixCauchy`.
+    /// klauspost's [`buildMatrixCauchy`]: identity on top, `INV_TABLE[r ^ c]`
+    /// on the parity rows. Cheaper than Vandermonde (no inversion), different
+    /// parity bytes, not wire-compatible.
+    ///
+    /// [`buildMatrixCauchy`]: https://github.com/klauspost/reedsolomon/blob/master/matrix.go
     pub fn cauchy(data_shards: usize, total_shards: usize) -> Self {
         let mut m = Self::zero(total_shards, data_shards);
         for r in 0..total_shards {
@@ -103,7 +106,7 @@ impl Matrix {
         Ok(result)
     }
 
-    /// `[self | right]` — horizontal concatenation.
+    /// Horizontal concatenation: returns `[self | right]`.
     pub fn augment(&self, right: &Matrix) -> Matrix {
         assert_eq!(self.rows, right.rows, "augment row count mismatch");
         let new_cols = self.cols + right.cols;
@@ -145,8 +148,9 @@ impl Matrix {
         self.rows == self.cols
     }
 
-    /// Gauss-Jordan inversion via augmentation with the identity.
-    /// Matches klauspost's `Matrix.Invert`.
+    /// klauspost's [`Matrix.Invert`]: Gauss-Jordan after augmenting with I.
+    ///
+    /// [`Matrix.Invert`]: https://github.com/klauspost/reedsolomon/blob/master/matrix.go
     pub fn invert(&self) -> Result<Matrix> {
         if !self.is_square() {
             return Err(Error::SingularMatrix);
@@ -157,8 +161,9 @@ impl Matrix {
         Ok(work.sub_matrix(0, n, n, 2 * n))
     }
 
-    /// In-place Gauss-Jordan over GF(2^8); XOR is subtraction in char 2.
-    /// Matches klauspost's `gaussianElimination`.
+    /// klauspost's [`gaussianElimination`]. XOR is subtraction in char 2.
+    ///
+    /// [`gaussianElimination`]: https://github.com/klauspost/reedsolomon/blob/master/matrix.go
     fn gaussian_elimination(&mut self) -> Result<()> {
         let rows = self.rows;
         let cols = self.cols;
@@ -183,7 +188,6 @@ impl Matrix {
                     self.set(r, c, mul(v, scale));
                 }
             }
-            // Zero column r below the diagonal. XOR == subtraction in GF(2^8).
             for rb in (r + 1)..rows {
                 if self.get(rb, r) != 0 {
                     let scale = self.get(rb, r);
@@ -275,7 +279,7 @@ mod tests {
         let parity = 6;
         let m = Matrix::cauchy(data, data + parity);
 
-        // Rows [0, 2, 5, 8] — mix of identity and Cauchy rows.
+        // Rows [0, 2, 5, 8] are a mix of identity and Cauchy rows.
         let mut sub = Matrix::zero(data, data);
         for (i, &r) in [0usize, 2, 5, 8].iter().enumerate() {
             for c in 0..data {
@@ -300,5 +304,34 @@ mod tests {
         let i = Matrix::identity(3);
         let prod = m.multiply(&i).unwrap();
         assert_eq!(prod, m);
+    }
+
+    // `invert_round_trip` exercises multiply but only checks the result equals
+    // I; these pin specific output bytes.
+    #[test]
+    fn multiply_hand_computed() {
+        // 2x2 with no polynomial reduction (every product fits in 8 bits).
+        //   [2 3]   [2 1]   [2*2^3*3  2*1^3*2]   [4^5  2^6]   [1 4]
+        //   [1 1] * [3 2] = [1*2^1*3  1*1^1*2] = [2^3  1^2] = [1 3]
+        let a = from_rows(&[&[2, 3], &[1, 1]]);
+        let b = from_rows(&[&[2, 1], &[3, 2]]);
+        let expected = from_rows(&[&[1, 4], &[1, 3]]);
+        assert_eq!(a.multiply(&b).unwrap(), expected);
+
+        // Triggers polynomial reduction: mul(0x80, 2) = x^7 * x = x^8 = 0x1D.
+        let a = from_rows(&[&[0x80]]);
+        let b = from_rows(&[&[2]]);
+        let expected = from_rows(&[&[0x1D]]);
+        assert_eq!(a.multiply(&b).unwrap(), expected);
+    }
+
+    fn from_rows(rows: &[&[u8]]) -> Matrix {
+        let mut m = Matrix::zero(rows.len(), rows[0].len());
+        for (r, row) in rows.iter().enumerate() {
+            for (c, &v) in row.iter().enumerate() {
+                m.set(r, c, v);
+            }
+        }
+        m
     }
 }

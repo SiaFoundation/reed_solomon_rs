@@ -1,14 +1,12 @@
-//! GF(2^8) with primitive element 2 and generator polynomial 0x11D —
-//! the field klauspost/reedsolomon uses. Tables baked in via `const fn`.
-//!
-//! Translation of the field code in klauspost/reedsolomon's
-//! [`galois.go`](https://github.com/klauspost/reedsolomon/blob/master/galois.go):
-//! `galLogTable` / `galExpTable` initialization, `galMultiply`, `galMulSlice`,
-//! and `galMulSliceXor`.
+//! GF(2^8) arithmetic, ported from klauspost/reedsolomon
+//! ([`galois.go`](https://github.com/klauspost/reedsolomon/blob/master/galois.go)).
+//! Polynomial 0x11D, tables built at compile time. SIMD backends in submodules;
+//! the public `mul_slice` / `mul_slice_xor` dispatch at first call.
+
+mod scalar;
 
 const GENERATING_POLYNOMIAL: u16 = 0x11D;
 
-/// `EXP[i] = 2^i mod (255)`, `LOG[x]` is the inverse (undefined at x = 0).
 const fn build_log_exp() -> ([u8; 256], [u8; 256]) {
     let mut log = [0u8; 256];
     let mut exp = [0u8; 256];
@@ -24,8 +22,7 @@ const fn build_log_exp() -> ([u8; 256], [u8; 256]) {
         }
         i += 1;
     }
-    // Sentinel: `inv(1)` evaluates `EXP[255 - log[1]] = EXP[255]`. Mirroring
-    // exp[0] = 1 here lets `inv` skip a wrap-around check on the hot path.
+    // Sentinel so `inv(1)` can index EXP[255] without a wrap-around check.
     exp[255] = exp[0];
     (log, exp)
 }
@@ -35,8 +32,9 @@ const TABLES: ([u8; 256], [u8; 256]) = build_log_exp();
 pub(crate) const LOG_TABLE: [u8; 256] = TABLES.0;
 pub(crate) const EXP_TABLE: [u8; 256] = TABLES.1;
 
-/// `a * b` in GF(2^8). Matches klauspost's `galMultiply` in `galois.go`.
-/// Zero is handled explicitly since `log(0)` is undefined.
+/// GF(2^8) multiply. See klauspost's [`galMultiply`].
+///
+/// [`galMultiply`]: https://github.com/klauspost/reedsolomon/blob/master/galois.go
 pub(crate) const fn mul(a: u8, b: u8) -> u8 {
     if a == 0 || b == 0 {
         return 0;
@@ -44,18 +42,12 @@ pub(crate) const fn mul(a: u8, b: u8) -> u8 {
     let la = LOG_TABLE[a as usize] as u16;
     let lb = LOG_TABLE[b as usize] as u16;
     let sum = la + lb;
-    // la, lb ∈ [0, 254] so sum ∈ [0, 508]; subtract the multiplicative-group
-    // order (255) once when sum ≥ 255. Equivalent to `sum % 255` but avoids
-    // the division at every multiply.
+    // sum in [0, 508]; one subtract equals `sum % 255` without the division.
     let idx = if sum >= 255 { sum - 255 } else { sum };
     EXP_TABLE[idx as usize]
 }
 
-/// Builds the 256x256 multiplication table.
-///
-/// `MUL_TABLE[a][b] = a * b` in GF(2^8). 64 KiB; the encode hot path indexes
-/// `MUL_TABLE[coeff]` once per (matrix-row, data-shard) pair and then walks
-/// the resulting 256-byte table inside an inner loop, which keeps it in L1.
+/// MUL_TABLE[a][b] = mul(a, b).
 const fn build_mul_table() -> [[u8; 256]; 256] {
     let mut table = [[0u8; 256]; 256];
     let mut a: usize = 0;
@@ -72,12 +64,98 @@ const fn build_mul_table() -> [[u8; 256]; 256] {
 
 pub(crate) static MUL_TABLE: [[u8; 256]; 256] = build_mul_table();
 
-/// `1 / a` in GF(2^8). Undefined (returns 0) for a = 0.
+// Shared by the SIMD backends; gated together so nothing here is compiled
+// when no backend will consume it.
+#[cfg(any(
+    all(target_arch = "x86_64", feature = "simd"),
+    all(
+        any(target_arch = "aarch64", target_arch = "arm64ec"),
+        target_feature = "neon",
+        feature = "simd",
+    ),
+))]
+mod simd {
+    use super::mul;
+
+    /// Nibble-split lookup tables for VPSHUFB / VTBL. Per coefficient: 16
+    /// bytes for the low-nibble lookup, 16 for the high-nibble lookup. The
+    /// xor of the two is `mul(c, x)`.
+    pub(super) static NIBBLE_TABLES: [[u8; 32]; 256] = build_nibble_tables();
+
+    const fn build_nibble_tables() -> [[u8; 32]; 256] {
+        let mut t = [[0u8; 32]; 256];
+        let mut c: usize = 0;
+        while c < 256 {
+            let mut n: usize = 0;
+            while n < 16 {
+                t[c][n] = mul(c as u8, n as u8);
+                t[c][16 + n] = mul(c as u8, (n as u8) << 4);
+                n += 1;
+            }
+            c += 1;
+        }
+        t
+    }
+
+    /// Calls `one(p_in, p_out)` per VEC-byte chunk, unrolled UNROLL times,
+    /// then once for any remaining whole VEC, then hands the byte tail to
+    /// `tail`. `#[inline(always)]` so the closure inherits the caller's
+    /// target_feature context.
+    #[inline(always)]
+    pub(super) fn slice_loop<const VEC: usize, const UNROLL: usize>(
+        input: &[u8],
+        out: &mut [u8],
+        mut one: impl FnMut(*const u8, *mut u8),
+        tail: impl FnOnce(&[u8], &mut [u8]),
+    ) {
+        debug_assert_eq!(input.len(), out.len());
+        let stride = VEC * UNROLL;
+
+        let mut in_u = input.chunks_exact(stride);
+        let mut out_u = out.chunks_exact_mut(stride);
+        for (in_block, out_block) in (&mut in_u).zip(&mut out_u) {
+            let p_in = in_block.as_ptr();
+            let p_out = out_block.as_mut_ptr();
+            for k in 0..UNROLL {
+                // SAFETY: chunks_exact returned exactly VEC*UNROLL bytes.
+                let off = k * VEC;
+                one(unsafe { p_in.add(off) }, unsafe { p_out.add(off) });
+            }
+        }
+
+        let mut in_s = in_u.remainder().chunks_exact(VEC);
+        let mut out_s = out_u.into_remainder().chunks_exact_mut(VEC);
+        for (in_block, out_block) in (&mut in_s).zip(&mut out_s) {
+            one(in_block.as_ptr(), out_block.as_mut_ptr());
+        }
+
+        tail(in_s.remainder(), out_s.into_remainder());
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::super::mul;
+        use super::NIBBLE_TABLES;
+
+        #[test]
+        fn nibble_tables_match_mul() {
+            for c in 0..=255u8 {
+                let t = &NIBBLE_TABLES[c as usize];
+                for x in 0..=255u8 {
+                    let lo = t[(x & 0x0F) as usize];
+                    let hi = t[16 + ((x >> 4) & 0x0F) as usize];
+                    assert_eq!(lo ^ hi, mul(c, x), "c={c} x={x}");
+                }
+            }
+        }
+    }
+}
+
+/// Multiplicative inverse in GF(2^8). Returns 0 for a = 0 (undefined).
 pub(crate) const fn inv(a: u8) -> u8 {
     if a == 0 {
         return 0;
     }
-    // 1/a = exp[(255 - log[a]) mod 255]
     let la = LOG_TABLE[a as usize] as u16;
     let idx = 255 - la;
     EXP_TABLE[idx as usize]
@@ -95,14 +173,10 @@ const fn build_inv_table() -> [u8; 256] {
 
 pub(crate) const INV_TABLE: [u8; 256] = build_inv_table();
 
-/// `a^n` in GF(2^8). Matches `galExp` from klauspost/reedsolomon
-/// (`galois.go`):
+/// GF(2^8) exponentiation. See klauspost's [`galExp`] for the 0^0 = 1
+/// convention this depends on (used by Vandermonde row construction).
 ///
-///   - `a^0 == 1` for all `a` (including `0^0 == 1`).
-///   - `0^n == 0` for `n > 0`.
-///   - Otherwise computed via `EXP[(LOG[a] * n) mod 255]`.
-///
-/// Used to construct Vandermonde matrices, where row `r` column `c` is `r^c`.
+/// [`galExp`]: https://github.com/klauspost/reedsolomon/blob/master/galois.go
 pub(crate) const fn exp(a: u8, n: usize) -> u8 {
     if n == 0 {
         return 1;
@@ -114,48 +188,69 @@ pub(crate) const fn exp(a: u8, n: usize) -> u8 {
     EXP_TABLE[(log_a * n) % 255]
 }
 
-/// `out[i] = MUL_TABLE[coeff][input[i]]`. Matches `galMulSlice` from
-/// klauspost's `galois.go`. Used for the first contribution to a parity
-/// shard so we can skip XOR with an undefined buffer.
-#[inline(always)]
-pub(crate) fn mul_slice(coeff: u8, input: &[u8], out: &mut [u8]) {
-    debug_assert_eq!(input.len(), out.len());
-    let table = &MUL_TABLE[coeff as usize];
-    for (o, &x) in out.iter_mut().zip(input.iter()) {
-        *o = table[x as usize];
-    }
-}
+cfg_if::cfg_if! {
+    if #[cfg(all(target_arch = "x86_64", feature = "simd"))] {
+        mod avx2;
+        mod gfni;
 
-/// `out[i] ^= MUL_TABLE[coeff][input[i]]`. Matches `galMulSliceXor` from
-/// klauspost's `galois.go`. The hot loop of the encoder.
-#[inline(always)]
-pub(crate) fn mul_slice_xor(coeff: u8, input: &[u8], out: &mut [u8]) {
-    debug_assert_eq!(input.len(), out.len());
-    let table = &MUL_TABLE[coeff as usize];
-    for (o, &x) in out.iter_mut().zip(input.iter()) {
-        *o ^= table[x as usize];
+        pub(crate) fn mul_slice(coeff: u8, input: &[u8], out: &mut [u8]) {
+            debug_assert_eq!(input.len(), out.len());
+            unsafe {
+                if is_x86_feature_detected!("gfni")
+                    && is_x86_feature_detected!("avx2")
+                    && is_x86_feature_detected!("avx")
+                {
+                    return gfni::mul_slice(coeff, input, out);
+                } else if is_x86_feature_detected!("avx2") {
+                    return avx2::mul_slice(coeff, input, out);
+                }
+            }
+            scalar::mul_slice(coeff, input, out)
+        }
+
+        pub(crate) fn mul_slice_xor(coeff: u8, input: &[u8], out: &mut [u8]) {
+            debug_assert_eq!(input.len(), out.len());
+            unsafe {
+                if is_x86_feature_detected!("gfni") && is_x86_feature_detected!("avx2") {
+                    return gfni::mul_slice_xor(coeff, input, out);
+                } else if is_x86_feature_detected!("avx2") {
+                    return avx2::mul_slice_xor(coeff, input, out);
+                }
+            }
+            scalar::mul_slice_xor(coeff, input, out)
+        }
+    } else if #[cfg(all(
+        any(target_arch = "aarch64", target_arch = "arm64ec"),
+        target_feature = "neon",
+        feature = "simd",
+    ))] {
+        mod neon;
+
+        pub(crate) fn mul_slice(coeff: u8, input: &[u8], out: &mut [u8]) {
+            debug_assert_eq!(input.len(), out.len());
+            neon::mul_slice(coeff, input, out)
+        }
+
+        pub(crate) fn mul_slice_xor(coeff: u8, input: &[u8], out: &mut [u8]) {
+            debug_assert_eq!(input.len(), out.len());
+            neon::mul_slice_xor(coeff, input, out)
+        }
+    } else {
+        pub(crate) fn mul_slice(coeff: u8, input: &[u8], out: &mut [u8]) {
+            debug_assert_eq!(input.len(), out.len());
+            scalar::mul_slice(coeff, input, out)
+        }
+
+        pub(crate) fn mul_slice_xor(coeff: u8, input: &[u8], out: &mut [u8]) {
+            debug_assert_eq!(input.len(), out.len());
+            scalar::mul_slice_xor(coeff, input, out)
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn mul_zero() {
-        for x in 0..=255u8 {
-            assert_eq!(mul(0, x), 0);
-            assert_eq!(mul(x, 0), 0);
-        }
-    }
-
-    #[test]
-    fn mul_one_is_identity() {
-        for x in 0..=255u8 {
-            assert_eq!(mul(1, x), x);
-            assert_eq!(mul(x, 1), x);
-        }
-    }
 
     #[test]
     fn mul_table_matches_mul() {
@@ -174,86 +269,52 @@ mod tests {
         }
     }
 
+    // klauspost defines 0^0 = 1 and 0^n = 0; the Vandermonde row
+    // construction in matrix.rs depends on both.
     #[test]
-    fn mul_is_commutative_and_associative() {
-        // Spot-check; full enumeration is 16M ops which is overkill.
-        let triples = [
-            (1u8, 2, 3),
-            (5, 17, 31),
-            (200, 150, 100),
-            (255, 254, 253),
-            (128, 64, 32),
-        ];
-        for (a, b, c) in triples {
-            assert_eq!(mul(a, b), mul(b, a));
-            assert_eq!(mul(mul(a, b), c), mul(a, mul(b, c)));
-        }
-    }
-
-    #[test]
-    fn exp_edge_cases() {
-        // 0^0 = 1 by klauspost convention.
+    fn exp_klauspost_conventions() {
         assert_eq!(exp(0, 0), 1);
-        // 0^n = 0 for n > 0.
-        for n in 1..10 {
-            assert_eq!(exp(0, n), 0);
-        }
-        // a^0 = 1 for all a.
-        for a in 0..=255u8 {
-            assert_eq!(exp(a, 0), 1);
-        }
-        // a^1 = a.
-        for a in 0..=255u8 {
-            assert_eq!(exp(a, 1), a);
-        }
-        // 2^2 = 4 (no reduction needed).
-        assert_eq!(exp(2, 2), 4);
-        // 2^8 hits the polynomial — equals 0x1D (= generator low byte).
+        assert_eq!(exp(0, 1), 0);
+        // 2^8 reduces to 0x1D, the low byte of the generator polynomial.
         assert_eq!(exp(2, 8), GENERATING_POLYNOMIAL as u8);
     }
 
+    // Anchor values reproduced from klauspost on the same field.
     #[test]
     fn known_vectors() {
-        // A handful of values produced by Klaus Post's reedsolomon library on
-        // the same field; if these match we have the right tables.
         assert_eq!(LOG_TABLE[1], 0);
         assert_eq!(LOG_TABLE[2], 1);
         assert_eq!(EXP_TABLE[0], 1);
         assert_eq!(EXP_TABLE[1], 2);
-        assert_eq!(EXP_TABLE[8], GENERATING_POLYNOMIAL as u8); // 0x1D
-        // 2 * 3 = 2 + 3 in poly form (carry-less since neither has the high
-        // bit) — straight XOR-add of x and x+1 = x*(x+1) = x^2+x = 6.
+        assert_eq!(EXP_TABLE[8], GENERATING_POLYNOMIAL as u8);
         assert_eq!(mul(2, 3), 6);
-        // 2 * 2 = x*x = x^2 = 4.
         assert_eq!(mul(2, 2), 4);
-        // 0x80 * 2 = polynomial reduction kicks in (x^7 * x = x^8 ≡ 0x1D).
         assert_eq!(mul(0x80, 2), GENERATING_POLYNOMIAL as u8);
-        // a * (1/a) = 1.
         assert_eq!(mul(0x53, INV_TABLE[0x53]), 1);
         assert_eq!(mul(0xCA, INV_TABLE[0xCA]), 1);
     }
 
     #[test]
-    fn mul_slice_matches_scalar() {
-        let input: Vec<u8> = (0..200u32).map(|x| x as u8).collect();
-        let mut out_simd = vec![0u8; input.len()];
-        let mut out_scalar = vec![0u8; input.len()];
-        for coeff in [0u8, 1, 2, 7, 13, 100, 255] {
-            mul_slice(coeff, &input, &mut out_simd);
-            for (o, &x) in out_scalar.iter_mut().zip(&input) {
-                *o = mul(coeff, x);
-            }
-            assert_eq!(out_simd, out_scalar, "coeff={coeff}");
-        }
-    }
+    fn dispatch_matches_scalar_all_coeffs() {
+        let lengths = [0usize, 1, 7, 15, 16, 17, 31, 32, 33, 63, 64, 100, 257, 1024];
+        let input: Vec<u8> = (0..1024u32).map(|x| (x ^ (x >> 3)) as u8).collect();
+        for &n in &lengths {
+            for coeff in [0u8, 1, 2, 3, 5, 7, 13, 17, 31, 100, 128, 200, 254, 255] {
+                let mut out_dispatch = vec![0u8; n];
+                let mut out_scalar = vec![0u8; n];
+                mul_slice(coeff, &input[..n], &mut out_dispatch);
+                scalar::mul_slice(coeff, &input[..n], &mut out_scalar);
+                assert_eq!(out_dispatch, out_scalar, "mul_slice: coeff={coeff} n={n}");
 
-    #[test]
-    fn mul_slice_xor_accumulates() {
-        let input: Vec<u8> = (0..200u32).map(|x| (x as u8).wrapping_mul(7)).collect();
-        let mut out = vec![0xABu8; input.len()];
-        let coeff = 17u8;
-        let expected: Vec<u8> = input.iter().map(|&x| 0xAB ^ mul(coeff, x)).collect();
-        mul_slice_xor(coeff, &input, &mut out);
-        assert_eq!(out, expected);
+                let mut xor_dispatch: Vec<u8> = (0..n).map(|i| (i ^ 0xA5) as u8).collect();
+                let mut xor_scalar = xor_dispatch.clone();
+                mul_slice_xor(coeff, &input[..n], &mut xor_dispatch);
+                scalar::mul_slice_xor(coeff, &input[..n], &mut xor_scalar);
+                assert_eq!(
+                    xor_dispatch, xor_scalar,
+                    "mul_slice_xor: coeff={coeff} n={n}"
+                );
+            }
+        }
     }
 }

@@ -17,29 +17,31 @@ path = "src/lib.rs"
 bench = false
 
 [features]
-default = ["parallel"]
+default = ["parallel", "simd"]
 # Cross-shard and intra-shard parallelism via rayon. Disable for WASM targets
 # where threads aren't available.
 parallel = ["dep:rayon"]
+# Runtime-dispatched AVX2 / GFNI / NEON paths. Disable for benchmarking the
+# scalar fallback, binary-size trimming, or as an escape hatch for suspected
+# SIMD bugs. WASM and other non-x86/aarch64 targets fall through to scalar
+# regardless of this flag.
+simd = []
 
 [dependencies]
 thiserror = "2.0.18"
 rayon = { version = "1.11", optional = true }
+cfg-if = "1.0"
 
 [dev-dependencies]
 criterion = { version = "0.8.2", features = ["html_reports"] }
 rand = "0.10.1"
 getrandom = "0.4"
-# Used by the comparison benchmark (same version sia_storage currently uses,
-# so bench numbers reflect what would actually change at the call site) AND
-# by the cross-implementation equivalence test that proves we produce
-# bit-identical parity bytes to Sia's existing encoder.
-reed-solomon-erasure = "6.0.0"
-# Another GF(2^8)+poly-0x1D, WASM-compatible erasure crate. Enable the
-# parallel/rayon features so the comparison isn't lopsided by our own
-# rayon parallelism.
-fec-rs = { version = "0.1.0", features = ["parallel", "rayon"] }
 
 [[bench]]
 name = "reed_solomon"
 harness = false
+
+# Cross-crate comparison benches; run with:
+#   cargo bench -p sia_reed_solomon_comparisons
+[workspace]
+members = ["comparisons"]

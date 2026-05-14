@@ -1,5 +1,5 @@
 use rand::rngs::StdRng;
-use rand::{Rng, SeedableRng};
+use rand::{Rng, RngExt, SeedableRng};
 use sia_reed_solomon::ReedSolomon;
 
 /// Klauspost-generated golden bytes at Sia's 10-of-30 / 256 B config.
@@ -152,6 +152,36 @@ fn klauspost_10of30_golden_drop_max() {
     rs.reconstruct(&mut opt).unwrap();
     let rebuilt: Vec<Vec<u8>> = opt.into_iter().map(|s| s.unwrap()).collect();
     assert_eq!(rebuilt, golden, "dropping all data shards failed");
+}
+
+// Complements the contiguous-window coverage in `klauspost_10of30_*`.
+#[test]
+fn reconstruct_arbitrary_drop_patterns() {
+    let data = 5usize;
+    let parity = 3usize;
+    let total = data + parity;
+    let rs = ReedSolomon::new(data, parity).unwrap();
+    let mut rng = StdRng::seed_from_u64(0xface_d00d);
+    let mut shards = make_shards(data, total, 128, &mut rng);
+    rs.encode(&mut shards).unwrap();
+    let pristine = shards.clone();
+
+    for _ in 0..100 {
+        // Pick a random subset of `parity` positions to drop.
+        let mut indices: Vec<usize> = (0..total).collect();
+        for i in (1..indices.len()).rev() {
+            indices.swap(i, rng.random_range(0..=i));
+        }
+        let drop: Vec<usize> = indices.into_iter().take(parity).collect();
+
+        let mut opt: Vec<Option<Vec<u8>>> = pristine.iter().cloned().map(Some).collect();
+        for &i in &drop {
+            opt[i] = None;
+        }
+        rs.reconstruct(&mut opt).unwrap();
+        let rebuilt: Vec<Vec<u8>> = opt.into_iter().map(|s| s.unwrap()).collect();
+        assert_eq!(rebuilt, pristine, "drop pattern {drop:?}");
+    }
 }
 
 #[test]

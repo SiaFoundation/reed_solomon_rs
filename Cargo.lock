@@ -750,13 +750,23 @@ checksum = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
 name = "sia_reed_solomon"
 version = "0.1.0"
 dependencies = [
+ "cfg-if",
  "criterion",
- "fec-rs",
  "getrandom 0.4.2",
  "rand",
  "rayon",
- "reed-solomon-erasure",
  "thiserror",
+]
+
+[[package]]
+name = "sia_reed_solomon_comparisons"
+version = "0.0.0"
+dependencies = [
+ "criterion",
+ "fec-rs",
+ "rand",
+ "reed-solomon-erasure",
+ "sia_reed_solomon",
 ]
 
 [[package]]
