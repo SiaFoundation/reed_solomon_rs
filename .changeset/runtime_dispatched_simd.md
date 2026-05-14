@@ -1,30 +1,21 @@
 ---
-sia_reed_solomon: minor
+sia_reed_solomon: major
 ---
 
 # Support NEON, AVX2, GFNI
 
 `encode`, `verify`, and `reconstruct` now use NEON on aarch64, AVX2 or GFNI
-on x86_64 (whichever the CPU supports), and the scalar fallback elsewhere.
+on x86_64 (whichever the CPU supports), and a no-SIMD fallback elsewhere.
 
 A new `simd` Cargo feature is on by default. Set `default-features = false`
-to force the scalar path (useful for WASM, benchmarking, or debugging a
+to force the no-SIMD path (useful for WASM, benchmarking, or debugging a
 suspected SIMD bug).
 
-Apple M-series, 10-of-30 @ 4 MiB shards:
+10-of-30 @ 4 MiB shards, AWS `c7i.4xlarge` (GFNI):
 
-| Operation                | Before    | After       | Speedup |
-|--------------------------|-----------|-------------|---------|
-| `encode`                 | 6.3 GiB/s | 61.9 GiB/s  | 9.8x    |
-| `verify`                 | 5.8 GiB/s | 29.8 GiB/s  | 5.1x    |
-| `reconstruct -1 data`    | 34.2 GiB/s| 110.6 GiB/s | 3.2x    |
-| `reconstruct -10 data`   | 4.1 GiB/s | 31.3 GiB/s  | 7.6x    |
-
-AMD EPYC 7B13 (AVX2):
-
-| Operation                | Before    | After      | Speedup |
-|--------------------------|-----------|------------|---------|
-| `encode`                 | 6.8 GiB/s | 24.4 GiB/s | 3.6x    |
-| `verify`                 | 3.2 GiB/s | 4.3 GiB/s  | 1.3x    |
-| `reconstruct -1 data`    | 1.8 GiB/s | 7.9 GiB/s  | 4.3x    |
-| `reconstruct -10 data`   | 3.4 GiB/s | 4.4 GiB/s  | 1.3x    |
+| Operation                | Before     | After      | Speedup |
+|--------------------------|------------|------------|---------|
+| `encode`                 | 3.4 GiB/s  | 26.5 GiB/s | 7.9x    |
+| `verify`                 | 2.1 GiB/s  | 4.7 GiB/s  | 2.2x    |
+| `reconstruct -1 data`    | 13.4 GiB/s | 33.5 GiB/s | 2.5x    |
+| `reconstruct -10 data`   | 2.0 GiB/s  | 8.3 GiB/s  | 4.2x    |
