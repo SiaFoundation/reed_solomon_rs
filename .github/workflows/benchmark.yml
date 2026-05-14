@@ -15,20 +15,20 @@ jobs:
       matrix:
         include:
           # Skylake-SP: AVX2 yes, GFNI no.
-          - name: AVX2 (c5.metal)
-            slug: avx2-c5-metal
-            runner: runs-on=${{ github.run_id }}/family=c5.metal/image=ubuntu24-full-x64
+          - name: AVX2 (c5.8xlarge)
+            slug: avx2-c5-8xlarge
+            runner: runs-on=${{ github.run_id }}/family=c5.8xlarge/image=ubuntu24-full-x64
             scalar: false
           # Sapphire Rapids: AVX2 + GFNI; dispatcher picks GFNI. Scalar
           # baseline runs here only — one reference point is enough.
-          - name: GFNI (c7i.metal-24xl)
-            slug: gfni-c7i-metal-24xl
-            runner: runs-on=${{ github.run_id }}/family=c7i.metal-24xl/image=ubuntu24-full-x64
+          - name: GFNI (c7i.8xlarge)
+            slug: gfni-c7i-8xlarge
+            runner: runs-on=${{ github.run_id }}/family=c7i.8xlarge/image=ubuntu24-full-x64
             scalar: true
           # Graviton 3: aarch64 NEON.
-          - name: NEON (c7g.metal)
-            slug: neon-c7g-metal
-            runner: runs-on=${{ github.run_id }}/family=c7g.metal/image=ubuntu24-full-arm64
+          - name: NEON (c7g.8xlarge)
+            slug: neon-c7g-8xlarge
+            runner: runs-on=${{ github.run_id }}/family=c7g.8xlarge/image=ubuntu24-full-arm64
             scalar: false
     runs-on: ${{ matrix.runner }}
     steps:
