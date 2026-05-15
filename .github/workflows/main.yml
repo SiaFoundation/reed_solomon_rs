@@ -17,7 +17,7 @@ jobs:
   test:
     runs-on: tenki-standard-medium-4c-8g
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - name: Setup Environment
         run: |
           rustup update stable
@@ -80,7 +80,7 @@ jobs:
             disallow: ""
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - name: Confirm CPU features
         run: |
           set -e
