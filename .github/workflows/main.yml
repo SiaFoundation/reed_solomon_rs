@@ -15,6 +15,7 @@ permissions:
 
 jobs:
   lint:
+    name: Lint
     runs-on: tenki-standard-medium-4c-8g
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -42,11 +43,11 @@ jobs:
         run: cargo build --benches
 
   test:
-    name: ${{ matrix.os }}
+    name: Test ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [tenki-standard-medium-4c-8g, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -60,6 +61,7 @@ jobs:
         run: cargo test --no-default-features
 
   wasm:
+    name: Test WASM
     runs-on: tenki-standard-medium-4c-8g
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -73,9 +75,8 @@ jobs:
       - name: Test Firefox (wasm32, simd128)
         run: wasm-pack test --firefox --headless -- --no-default-features --features simd
 
-  # Tests each SIMD backend on a runner whose CPU actually has the feature.
   simd:
-    name: SIMD (${{ matrix.name }})
+    name: Test SIMD (${{ matrix.name }})
     strategy:
       fail-fast: false
       matrix:
