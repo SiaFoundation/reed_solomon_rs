@@ -14,7 +14,7 @@ permissions:
   contents: read
 
 jobs:
-  test:
+  lint:
     runs-on: tenki-standard-medium-4c-8g
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -24,41 +24,56 @@ jobs:
           rustup toolchain install nightly
           rustup target add wasm32-unknown-unknown
           rustup component add rustfmt --toolchain nightly
-          cargo install wasm-pack
       - name: Rustfmt
         run: cargo +nightly fmt --all -- --check
       - name: Clippy
-        run: |
-          cargo clippy --all-targets --all-features -- -D warnings
-          cargo check --all-features
+        run: cargo clippy --all-targets --all-features -- -D warnings
+      - name: Clippy (no default features)
+        run: cargo clippy --all-targets --no-default-features -- -D warnings
+      - name: Clippy (wasm)
+        run: cargo clippy --target wasm32-unknown-unknown --lib -- -D warnings
       - name: Clippy (wasm, no default features)
-        # `parallel` (rayon) is disabled on WASM; make sure the crate still
-        # builds cleanly for `wasm32-unknown-unknown` without it.
         run: cargo clippy --target wasm32-unknown-unknown --lib --no-default-features -- -D warnings
-      - name: Clippy (wasm, simd128)
-        # Lints the `simd128` backend (src/galois/wasm.rs).
-        run: cargo clippy --target wasm32-unknown-unknown --lib --no-default-features --features simd -- -D warnings
       - name: Build docs
         run: cargo doc --all-features --no-deps
         env:
           RUSTDOCFLAGS: "-D warnings"
       - name: Build benches
         run: cargo build --benches
+
+  test:
+    name: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Setup Rust
+        run: rustup update stable
       - name: Test
         run: cargo test
       - name: Test (no SIMD)
-        run: cargo test --no-default-features --features=parallel
+        run: cargo test --no-default-features --features parallel
       - name: Test (no parallel or SIMD)
         run: cargo test --no-default-features
+
+  wasm:
+    runs-on: tenki-standard-medium-4c-8g
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Setup Rust
+        run: |
+          rustup update stable
+          rustup target add wasm32-unknown-unknown
+          cargo install wasm-pack
       - name: Test Chrome (wasm32, simd128)
         run: wasm-pack test --chrome --headless -- --no-default-features --features simd
       - name: Test Firefox (wasm32, simd128)
         run: wasm-pack test --firefox --headless -- --no-default-features --features simd
 
-  # Exercises each SIMD backend on a runner whose CPU actually has the feature.
-  # Without the per-feature confirmation step, a runner pool drift (e.g. AWS
-  # swapping the underlying instance) could silently make the relevant path
-  # untested even though `cargo test` passes.
+  # Tests each SIMD backend on a runner whose CPU actually has the feature.
   simd:
     name: SIMD (${{ matrix.name }})
     strategy:
