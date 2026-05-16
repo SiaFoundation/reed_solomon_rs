@@ -43,22 +43,26 @@ jobs:
         run: cargo build --benches
 
   test:
-    name: Test ${{ matrix.os }}
+    name: Test ${{ matrix.os }} (${{ matrix.variant }})
     strategy:
       fail-fast: false
       matrix:
         os: [tenki-standard-medium-4c-8g, macos-latest, windows-latest]
+        variant: [default, no-simd, scalar]
+        include:
+          - variant: default
+            flags: ""
+          - variant: no-simd
+            flags: "--no-default-features --features parallel"
+          - variant: scalar
+            flags: "--no-default-features"
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - name: Setup Rust
         run: rustup update stable
       - name: Test
-        run: cargo test
-      - name: Test (no SIMD)
-        run: cargo test --no-default-features --features parallel
-      - name: Test (no parallel or SIMD)
-        run: cargo test --no-default-features
+        run: cargo test ${{ matrix.flags }}
 
   wasm:
     name: Test WASM (${{ matrix.browser }}, ${{ matrix.variant }})
