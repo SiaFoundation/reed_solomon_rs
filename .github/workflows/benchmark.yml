@@ -61,6 +61,11 @@ jobs:
         run: |
           cargo bench --no-default-features --features parallel --bench reed_solomon 2>&1 | tee out/bench-scalar.txt
           mv target/criterion out/criterion-scalar
+      - name: Bench (no features)
+        if: matrix.scalar
+        run: |
+          cargo bench --no-default-features --bench reed_solomon 2>&1 | tee out/bench-no-features.txt
+          mv target/criterion out/criterion-no-features
       - name: Bench (cross-crate comparison)
         run: |
           cargo bench -p sia_reed_solomon_comparisons 2>&1 | tee out/bench-comparison.txt
