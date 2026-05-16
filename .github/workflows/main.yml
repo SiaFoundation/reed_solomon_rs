@@ -61,7 +61,17 @@ jobs:
         run: cargo test --no-default-features
 
   wasm:
-    name: Test WASM
+    name: Test WASM (${{ matrix.browser }}, ${{ matrix.variant }})
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chrome, firefox]
+        variant: [simd128, scalar]
+        include:
+          - variant: simd128
+            flags: ""
+          - variant: scalar
+            flags: "--no-default-features"
     runs-on: tenki-standard-medium-4c-8g
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -70,10 +80,8 @@ jobs:
           rustup update stable
           rustup target add wasm32-unknown-unknown
           cargo install wasm-pack
-      - name: Test Chrome (wasm32, simd128)
-        run: wasm-pack test --chrome --headless -- --no-default-features --features simd
-      - name: Test Firefox (wasm32, simd128)
-        run: wasm-pack test --firefox --headless -- --no-default-features --features simd
+      - name: Test
+        run: wasm-pack test --${{ matrix.browser }} --headless -- ${{ matrix.flags }}
 
   simd:
     name: Test SIMD (${{ matrix.name }})
