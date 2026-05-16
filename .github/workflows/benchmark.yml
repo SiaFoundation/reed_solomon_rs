@@ -12,9 +12,6 @@ jobs:
     name: ${{ matrix.name }}
     strategy:
       fail-fast: false
-      # 4xlarge is 16 vCPU and the account's on-demand quota is 32, so cap
-      # concurrency at two jobs.
-      max-parallel: 2
       matrix:
         include:
           # Skylake-SP: AVX2 yes, GFNI no.
