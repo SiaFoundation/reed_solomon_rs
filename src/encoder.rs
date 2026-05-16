@@ -286,14 +286,10 @@ fn code_some_shards(matrix_rows: &[&[u8]], inputs: &[&[u8]], outputs: Vec<&mut [
     }
 
     #[cfg(not(any(feature = "parallel", feature = "simd")))]
-    {
-        let mut out_refs = outputs;
-        process_block(matrix_rows, inputs, &mut out_refs);
-        return;
-    }
+    return process_block(matrix_rows, inputs, outputs);
 
     #[cfg(any(feature = "parallel", feature = "simd"))]
-    code_some_shards_blocked_seq(matrix_rows, inputs, outputs, len);
+    return code_some_shards_blocked_seq(matrix_rows, inputs, outputs, len);
 }
 
 #[cfg(feature = "parallel")]
@@ -367,8 +363,12 @@ fn code_some_shards_blocked_par(
 /// Process one block. Callers pre-slice so every input and output here has
 /// the same length.
 #[inline(always)]
-fn process_block(matrix_rows: &[&[u8]], inputs: &[&[u8]], outputs: &mut [&mut [u8]]) {
-    for (r, out_chunk) in outputs.iter_mut().enumerate() {
+fn process_block<'a, O: AsMut<[&'a mut [u8]]>>(
+    matrix_rows: &[&[u8]],
+    inputs: &[&[u8]],
+    mut outputs: O,
+) {
+    for (r, out_chunk) in outputs.as_mut().iter_mut().enumerate() {
         let coeffs = &matrix_rows[r];
         let mut wrote = false;
         for (c, &in_chunk) in inputs.iter().enumerate() {

@@ -3,16 +3,14 @@
 
 use super::MUL_TABLE;
 
-const UNROLL: usize = 8;
-
 #[inline]
 #[allow(dead_code)]
 pub(super) fn mul_slice(coeff: u8, input: &[u8], out: &mut [u8]) {
     debug_assert_eq!(input.len(), out.len());
     let table: &[u8; 256] = &MUL_TABLE[coeff as usize];
-    let mut in_chunks = input.chunks_exact(UNROLL);
-    let mut out_chunks = out.chunks_exact_mut(UNROLL);
-    for (oc, ic) in (&mut out_chunks).zip(&mut in_chunks) {
+    let (in_chunks, in_rem) = input.as_chunks::<8>();
+    let (out_chunks, out_rem) = out.as_chunks_mut::<8>();
+    for (oc, ic) in out_chunks.iter_mut().zip(in_chunks) {
         oc[0] = table[ic[0] as usize];
         oc[1] = table[ic[1] as usize];
         oc[2] = table[ic[2] as usize];
@@ -22,11 +20,7 @@ pub(super) fn mul_slice(coeff: u8, input: &[u8], out: &mut [u8]) {
         oc[6] = table[ic[6] as usize];
         oc[7] = table[ic[7] as usize];
     }
-    for (o, &x) in out_chunks
-        .into_remainder()
-        .iter_mut()
-        .zip(in_chunks.remainder())
-    {
+    for (o, &x) in out_rem.iter_mut().zip(in_rem) {
         *o = table[x as usize];
     }
 }
@@ -36,9 +30,9 @@ pub(super) fn mul_slice(coeff: u8, input: &[u8], out: &mut [u8]) {
 pub(super) fn mul_slice_xor(coeff: u8, input: &[u8], out: &mut [u8]) {
     debug_assert_eq!(input.len(), out.len());
     let table: &[u8; 256] = &MUL_TABLE[coeff as usize];
-    let mut in_chunks = input.chunks_exact(UNROLL);
-    let mut out_chunks = out.chunks_exact_mut(UNROLL);
-    for (oc, ic) in (&mut out_chunks).zip(&mut in_chunks) {
+    let (in_chunks, in_rem) = input.as_chunks::<8>();
+    let (out_chunks, out_rem) = out.as_chunks_mut::<8>();
+    for (oc, ic) in out_chunks.iter_mut().zip(in_chunks) {
         oc[0] ^= table[ic[0] as usize];
         oc[1] ^= table[ic[1] as usize];
         oc[2] ^= table[ic[2] as usize];
@@ -48,11 +42,7 @@ pub(super) fn mul_slice_xor(coeff: u8, input: &[u8], out: &mut [u8]) {
         oc[6] ^= table[ic[6] as usize];
         oc[7] ^= table[ic[7] as usize];
     }
-    for (o, &x) in out_chunks
-        .into_remainder()
-        .iter_mut()
-        .zip(in_chunks.remainder())
-    {
+    for (o, &x) in out_rem.iter_mut().zip(in_rem) {
         *o ^= table[x as usize];
     }
 }

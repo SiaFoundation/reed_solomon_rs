@@ -2,6 +2,13 @@ use rand::rngs::StdRng;
 use rand::{Rng, RngExt, SeedableRng};
 use sia_reed_solomon::ReedSolomon;
 
+// Shadows the built-in `#[test]` on wasm32 so the tests below also run under
+// wasm-bindgen-test-runner.
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen_test::wasm_bindgen_test as test;
+#[cfg(target_arch = "wasm32")]
+wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
+
 /// Klauspost-generated golden bytes at Sia's 10-of-30 / 256 B config.
 /// Layout: `[u8 data, u8 parity, u32_le size, then (data+parity)*size bytes]`.
 const GOLDEN_10_OF_30: &[u8] = include_bytes!("data/golden_10of30_256.bin");

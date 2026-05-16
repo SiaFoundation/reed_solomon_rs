@@ -73,6 +73,7 @@ pub(crate) static MUL_TABLE: [[u8; 256]; 256] = build_mul_table();
         target_feature = "neon",
         feature = "simd",
     ),
+    all(target_arch = "wasm32", target_feature = "simd128", feature = "simd"),
 ))]
 mod simd {
     use super::mul;
@@ -234,6 +235,22 @@ cfg_if::cfg_if! {
         pub(crate) fn mul_slice_xor(coeff: u8, input: &[u8], out: &mut [u8]) {
             debug_assert_eq!(input.len(), out.len());
             neon::mul_slice_xor(coeff, input, out)
+        }
+    } else if #[cfg(all(
+        target_arch = "wasm32",
+        target_feature = "simd128",
+        feature = "simd",
+    ))] {
+        mod wasm;
+
+        pub(crate) fn mul_slice(coeff: u8, input: &[u8], out: &mut [u8]) {
+            debug_assert_eq!(input.len(), out.len());
+            wasm::mul_slice(coeff, input, out)
+        }
+
+        pub(crate) fn mul_slice_xor(coeff: u8, input: &[u8], out: &mut [u8]) {
+            debug_assert_eq!(input.len(), out.len());
+            wasm::mul_slice_xor(coeff, input, out)
         }
     } else {
         pub(crate) fn mul_slice(coeff: u8, input: &[u8], out: &mut [u8]) {

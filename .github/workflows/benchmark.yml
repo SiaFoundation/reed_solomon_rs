@@ -89,9 +89,49 @@ jobs:
         with:
           name: bench-${{ matrix.slug }}
           path: out/
+
+  # Same SKU as the "no features" matrix entry so the wasm and scalar
+  # numbers share a host CPU.
+  wasm:
+    name: WASM (Node / c7i.4xlarge)
+    runs-on: runs-on=${{ github.run_id }}/family=c7i.4xlarge/image=ubuntu24-full-x64
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Show CPU
+        run: |
+          uname -a
+          grep -m1 -E 'model name|Hardware|Model' /proc/cpuinfo || true
+          node --version
+      - name: Setup Rust
+        run: |
+          rustup update stable
+          rustup target add wasm32-unknown-unknown
+      - name: Install wasm-pack
+        run: cargo install --locked wasm-pack
+      - name: Prepare output dir
+        run: mkdir -p out
+      - name: Bench (wasm32, scalar)
+        working-directory: bench-wasm
+        run: |
+          wasm-pack build --target nodejs --release
+          node run.mjs 2>&1 | tee ../out/bench-wasm-scalar.txt
+      - name: Bench (wasm32, simd128)
+        working-directory: bench-wasm
+        env:
+          RUSTFLAGS: "-C target-feature=+simd128"
+        run: |
+          rm -rf pkg
+          wasm-pack build --target nodejs --release --features simd
+          node run.mjs 2>&1 | tee ../out/bench-wasm-simd.txt
+      - name: Upload
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: bench-wasm-c7i-4xlarge
+          path: out/
+
   merge:
     name: Merge bench artifacts
-    needs: bench
+    needs: [bench, wasm]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/upload-artifact/merge@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

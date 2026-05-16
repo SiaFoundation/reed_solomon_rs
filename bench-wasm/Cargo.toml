@@ -1,0 +1,17 @@
+[package]
+name = "sia_reed_solomon_bench_wasm"
+version = "0.0.0"
+edition = "2024"
+publish = false
+description = "Wasm-bindgen bench harness for sia_reed_solomon"
+
+[lib]
+crate-type = ["cdylib"]
+
+[features]
+default = []
+simd = ["sia_reed_solomon/simd"]
+
+[dependencies]
+sia_reed_solomon = { path = "..", default-features = false }
+wasm-bindgen = "0.2"

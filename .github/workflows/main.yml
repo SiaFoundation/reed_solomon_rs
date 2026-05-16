@@ -24,6 +24,7 @@ jobs:
           rustup toolchain install nightly
           rustup target add wasm32-unknown-unknown
           rustup component add rustfmt --toolchain nightly
+          cargo install wasm-pack
       - name: Rustfmt
         run: cargo +nightly fmt --all -- --check
       - name: Clippy
@@ -34,6 +35,9 @@ jobs:
         # `parallel` (rayon) is disabled on WASM; make sure the crate still
         # builds cleanly for `wasm32-unknown-unknown` without it.
         run: cargo clippy --target wasm32-unknown-unknown --lib --no-default-features -- -D warnings
+      - name: Clippy (wasm, simd128)
+        # Lints the `simd128` backend (src/galois/wasm.rs).
+        run: cargo clippy --target wasm32-unknown-unknown --lib --no-default-features --features simd -- -D warnings
       - name: Build docs
         run: cargo doc --all-features --no-deps
         env:
@@ -46,6 +50,10 @@ jobs:
         run: cargo test --no-default-features --features=parallel
       - name: Test (no parallel or SIMD)
         run: cargo test --no-default-features
+      - name: Test Chrome (wasm32, simd128)
+        run: wasm-pack test --chrome --headless -- --no-default-features --features simd
+      - name: Test Firefox (wasm32, simd128)
+        run: wasm-pack test --firefox --headless -- --no-default-features --features simd
 
   # Exercises each SIMD backend on a runner whose CPU actually has the feature.
   # Without the per-feature confirmation step, a runner pool drift (e.g. AWS

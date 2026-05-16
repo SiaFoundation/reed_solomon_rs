@@ -15,16 +15,16 @@ exclude = ["knope.toml", ".changeset/*", ".github/*"]
 [lib]
 path = "src/lib.rs"
 bench = false
+crate-type = ["cdylib", "rlib"]
 
 [features]
 default = ["parallel", "simd"]
 # Cross-shard and intra-shard parallelism via rayon. Disable for WASM targets
 # where threads aren't available.
 parallel = ["dep:rayon"]
-# Runtime-dispatched AVX2 / GFNI / NEON paths. Disable for benchmarking the
+# Runtime-dispatched AVX2 / GFNI / NEON / SIMD128 paths. Disable for benchmarking the
 # scalar fallback, binary-size trimming, or as an escape hatch for suspected
-# SIMD bugs. WASM and other non-x86/aarch64 targets fall through to scalar
-# regardless of this flag.
+# SIMD bugs. Unsupported targets fall through to scalar regardless of this flag.
 simd = []
 
 [dependencies]
@@ -33,9 +33,15 @@ rayon = { version = "1.11", optional = true }
 cfg-if = "1.0"
 
 [dev-dependencies]
-criterion = { version = "0.8.2", features = ["html_reports"] }
 rand = "0.10.1"
 getrandom = "0.4"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+criterion = { version = "0.8.2", features = ["html_reports"] }
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+wasm-bindgen-test = "0.3"
+getrandom = { version = "0.4", features = ["wasm_js"] }
 
 [[bench]]
 name = "reed_solomon"
@@ -44,4 +50,4 @@ harness = false
 # Cross-crate comparison benches; run with:
 #   cargo bench -p sia_reed_solomon_comparisons
 [workspace]
-members = ["comparisons"]
+members = ["comparisons", "bench-wasm"]
