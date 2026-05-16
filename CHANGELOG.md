@@ -1,6 +1,5 @@
-## v0.1.0 (2026-05-13)
+# Changelog
 
-- Initial Release
 ## 0.2.0 (2026-05-14)
 
 ### Breaking Changes
@@ -26,3 +25,7 @@ suspected SIMD bug).
 ### Features
 
 - Skip rayon when per-thread work would be too small to amortize contention.
+
+## v0.1.0 (2026-05-13)
+
+- Initial Release
