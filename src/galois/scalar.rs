@@ -3,12 +3,30 @@
 
 use super::MUL_TABLE;
 
+const UNROLL: usize = 8;
+
 #[inline]
 #[allow(dead_code)]
 pub(super) fn mul_slice(coeff: u8, input: &[u8], out: &mut [u8]) {
     debug_assert_eq!(input.len(), out.len());
-    let table = &MUL_TABLE[coeff as usize];
-    for (o, &x) in out.iter_mut().zip(input.iter()) {
+    let table: &[u8; 256] = &MUL_TABLE[coeff as usize];
+    let mut in_chunks = input.chunks_exact(UNROLL);
+    let mut out_chunks = out.chunks_exact_mut(UNROLL);
+    for (oc, ic) in (&mut out_chunks).zip(&mut in_chunks) {
+        oc[0] = table[ic[0] as usize];
+        oc[1] = table[ic[1] as usize];
+        oc[2] = table[ic[2] as usize];
+        oc[3] = table[ic[3] as usize];
+        oc[4] = table[ic[4] as usize];
+        oc[5] = table[ic[5] as usize];
+        oc[6] = table[ic[6] as usize];
+        oc[7] = table[ic[7] as usize];
+    }
+    for (o, &x) in out_chunks
+        .into_remainder()
+        .iter_mut()
+        .zip(in_chunks.remainder())
+    {
         *o = table[x as usize];
     }
 }
@@ -17,8 +35,24 @@ pub(super) fn mul_slice(coeff: u8, input: &[u8], out: &mut [u8]) {
 #[allow(dead_code)]
 pub(super) fn mul_slice_xor(coeff: u8, input: &[u8], out: &mut [u8]) {
     debug_assert_eq!(input.len(), out.len());
-    let table = &MUL_TABLE[coeff as usize];
-    for (o, &x) in out.iter_mut().zip(input.iter()) {
+    let table: &[u8; 256] = &MUL_TABLE[coeff as usize];
+    let mut in_chunks = input.chunks_exact(UNROLL);
+    let mut out_chunks = out.chunks_exact_mut(UNROLL);
+    for (oc, ic) in (&mut out_chunks).zip(&mut in_chunks) {
+        oc[0] ^= table[ic[0] as usize];
+        oc[1] ^= table[ic[1] as usize];
+        oc[2] ^= table[ic[2] as usize];
+        oc[3] ^= table[ic[3] as usize];
+        oc[4] ^= table[ic[4] as usize];
+        oc[5] ^= table[ic[5] as usize];
+        oc[6] ^= table[ic[6] as usize];
+        oc[7] ^= table[ic[7] as usize];
+    }
+    for (o, &x) in out_chunks
+        .into_remainder()
+        .iter_mut()
+        .zip(in_chunks.remainder())
+    {
         *o ^= table[x as usize];
     }
 }
