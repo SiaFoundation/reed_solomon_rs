@@ -47,16 +47,20 @@ sia_reed_solomon = { version = "...", default-features = false }
 
 10 data + 20 parity, 4 MiB shards, on AWS `*.4xlarge` spot runners (16 vCPU
 each). SIMD is the default build; "no SIMD" is `--no-default-features --features
-parallel`.
+parallel`; "WASM" is `--no-default-features` (no SIMD, no parallel — what the
+`wasm32` target compiles).
 
 ### Throughput
 
-| Operation                  | AVX2 (c5.4xlarge) | GFNI (c7i.4xlarge) | NEON (c7g.4xlarge) | no SIMD (c7i.4xlarge) |
-|----------------------------|-------------------|--------------------|--------------------|----------------------|
-| `encode`                   | 20.1 GiB/s        | 26.5 GiB/s         | 28.2 GiB/s         | 3.4 GiB/s            |
-| `verify`                   | 4.0 GiB/s         | 4.7 GiB/s          | 6.0 GiB/s          | 2.1 GiB/s            |
-| `reconstruct -1 data lost` | 34.3 GiB/s        | 33.5 GiB/s         | 60.1 GiB/s         | 13.4 GiB/s           |
-| `reconstruct -10 data lost`| 6.6 GiB/s         | 8.3 GiB/s          | 10.6 GiB/s         | 2.0 GiB/s            |
+| Operation                  | AVX2 (c5.4xlarge) | GFNI (c7i.4xlarge) | NEON (c7g.4xlarge) | no SIMD (c7i.4xlarge) | WASM (c7i.4xlarge) |
+|----------------------------|-------------------|--------------------|--------------------|-----------------------|--------------------|
+| `encode`                   | 20.1 GiB/s        | 26.5 GiB/s         | 28.2 GiB/s         | 3.4 GiB/s             | 471 MiB/s          |
+| `verify`                   | 4.0 GiB/s         | 4.7 GiB/s          | 6.0 GiB/s          | 2.1 GiB/s             | 409 MiB/s          |
+| `reconstruct -1 data lost` | 34.3 GiB/s        | 33.5 GiB/s         | 60.1 GiB/s         | 13.4 GiB/s            | 2.6 GiB/s          |
+| `reconstruct -10 data lost`| 6.6 GiB/s         | 8.3 GiB/s          | 10.6 GiB/s         | 2.0 GiB/s             | 290 MiB/s          |
+
+Reconstruct throughput is per data slab (`data_shards × shard_size`), not per
+byte rebuilt.
 
 ### Comparisons
 
