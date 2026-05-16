@@ -285,6 +285,18 @@ fn code_some_shards(matrix_rows: &[&[u8]], inputs: &[&[u8]], outputs: Vec<&mut [
         }
     }
 
+    // Cache blocking helps SIMD kernels (table + working set fit in L1) and
+    // parallel fan-out, but its per-block slice setup is pure overhead for the
+    // scalar single-threaded path, which is already memory-bound and only
+    // touches a 256-byte row of MUL_TABLE per coefficient.
+    #[cfg(not(any(feature = "parallel", feature = "simd")))]
+    {
+        let mut out_refs = outputs;
+        process_block(matrix_rows, inputs, &mut out_refs);
+        return;
+    }
+
+    #[cfg(any(feature = "parallel", feature = "simd"))]
     code_some_shards_blocked_seq(matrix_rows, inputs, outputs, len);
 }
 
@@ -304,6 +316,7 @@ fn code_some_shards_rows_par(matrix_rows: &[&[u8]], inputs: &[&[u8]], outputs: V
     });
 }
 
+#[cfg(any(feature = "parallel", feature = "simd"))]
 fn code_some_shards_blocked_seq(
     matrix_rows: &[&[u8]],
     inputs: &[&[u8]],

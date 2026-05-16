@@ -3,12 +3,31 @@
 
 use super::MUL_TABLE;
 
+// 4× unrolled. The hot path is one table load + one store per byte; unrolling
+// exposes independent loads so the OoO core can issue them in parallel. Matches
+// the layout `reed-solomon-erasure` uses with unsafe pointer arithmetic, but
+// stays in safe Rust because `table: &[u8; 256]` makes `table[byte as usize]`
+// statically in-bounds and `chunks_exact(4)` slices are known to be length-4.
+const UNROLL: usize = 4;
+
 #[inline]
 #[allow(dead_code)]
 pub(super) fn mul_slice(coeff: u8, input: &[u8], out: &mut [u8]) {
     debug_assert_eq!(input.len(), out.len());
-    let table = &MUL_TABLE[coeff as usize];
-    for (o, &x) in out.iter_mut().zip(input.iter()) {
+    let table: &[u8; 256] = &MUL_TABLE[coeff as usize];
+    let mut in_chunks = input.chunks_exact(UNROLL);
+    let mut out_chunks = out.chunks_exact_mut(UNROLL);
+    for (oc, ic) in (&mut out_chunks).zip(&mut in_chunks) {
+        oc[0] = table[ic[0] as usize];
+        oc[1] = table[ic[1] as usize];
+        oc[2] = table[ic[2] as usize];
+        oc[3] = table[ic[3] as usize];
+    }
+    for (o, &x) in out_chunks
+        .into_remainder()
+        .iter_mut()
+        .zip(in_chunks.remainder())
+    {
         *o = table[x as usize];
     }
 }
@@ -17,8 +36,20 @@ pub(super) fn mul_slice(coeff: u8, input: &[u8], out: &mut [u8]) {
 #[allow(dead_code)]
 pub(super) fn mul_slice_xor(coeff: u8, input: &[u8], out: &mut [u8]) {
     debug_assert_eq!(input.len(), out.len());
-    let table = &MUL_TABLE[coeff as usize];
-    for (o, &x) in out.iter_mut().zip(input.iter()) {
+    let table: &[u8; 256] = &MUL_TABLE[coeff as usize];
+    let mut in_chunks = input.chunks_exact(UNROLL);
+    let mut out_chunks = out.chunks_exact_mut(UNROLL);
+    for (oc, ic) in (&mut out_chunks).zip(&mut in_chunks) {
+        oc[0] ^= table[ic[0] as usize];
+        oc[1] ^= table[ic[1] as usize];
+        oc[2] ^= table[ic[2] as usize];
+        oc[3] ^= table[ic[3] as usize];
+    }
+    for (o, &x) in out_chunks
+        .into_remainder()
+        .iter_mut()
+        .zip(in_chunks.remainder())
+    {
         *o ^= table[x as usize];
     }
 }
