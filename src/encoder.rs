@@ -270,7 +270,7 @@ fn code_some_shards(matrix_rows: &[&[u8]], inputs: &[&[u8]], outputs: Vec<&mut [
         return;
     }
 
-    #[cfg(feature = "parallel")]
+    #[cfg(all(feature = "parallel", not(target_arch = "wasm32")))]
     {
         let n_blocks = len.div_ceil(BLOCK_SIZE);
         let n_threads = rayon::current_num_threads().max(1);
@@ -285,14 +285,20 @@ fn code_some_shards(matrix_rows: &[&[u8]], inputs: &[&[u8]], outputs: Vec<&mut [
         }
     }
 
-    #[cfg(not(any(feature = "parallel", feature = "simd")))]
+    #[cfg(not(any(
+        all(feature = "parallel", not(target_arch = "wasm32")),
+        feature = "simd"
+    )))]
     return process_block(matrix_rows, inputs, outputs);
 
-    #[cfg(any(feature = "parallel", feature = "simd"))]
+    #[cfg(any(
+        all(feature = "parallel", not(target_arch = "wasm32")),
+        feature = "simd"
+    ))]
     return code_some_shards_blocked_seq(matrix_rows, inputs, outputs, len);
 }
 
-#[cfg(feature = "parallel")]
+#[cfg(all(feature = "parallel", not(target_arch = "wasm32")))]
 fn code_some_shards_rows_par(matrix_rows: &[&[u8]], inputs: &[&[u8]], outputs: Vec<&mut [u8]>) {
     use rayon::prelude::*;
     outputs.into_par_iter().enumerate().for_each(|(r, out)| {
@@ -308,7 +314,10 @@ fn code_some_shards_rows_par(matrix_rows: &[&[u8]], inputs: &[&[u8]], outputs: V
     });
 }
 
-#[cfg(any(feature = "parallel", feature = "simd"))]
+#[cfg(any(
+    all(feature = "parallel", not(target_arch = "wasm32")),
+    feature = "simd"
+))]
 fn code_some_shards_blocked_seq(
     matrix_rows: &[&[u8]],
     inputs: &[&[u8]],
@@ -326,7 +335,7 @@ fn code_some_shards_blocked_seq(
     }
 }
 
-#[cfg(feature = "parallel")]
+#[cfg(all(feature = "parallel", not(target_arch = "wasm32")))]
 fn code_some_shards_blocked_par(
     matrix_rows: &[&[u8]],
     inputs: &[&[u8]],

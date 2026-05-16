@@ -19,18 +19,18 @@ crate-type = ["cdylib", "rlib"]
 
 [features]
 default = ["parallel", "simd"]
-# Cross-shard and intra-shard parallelism via rayon. Disable for WASM targets
-# where threads aren't available.
+# Cross-shard and intra-shard parallelism via rayon. Automatically disabled on `wasm32`.
 parallel = ["dep:rayon"]
-# Runtime-dispatched AVX2 / GFNI / NEON / SIMD128 paths. Disable for benchmarking the
-# scalar fallback, binary-size trimming, or as an escape hatch for suspected
-# SIMD bugs. Unsupported targets fall through to scalar regardless of this flag.
+# Runtime-dispatched AVX2 / GFNI / NEON / SIMD128 paths. Unsupported targets 
+# fall through to scalar regardless of this flag.
 simd = []
 
 [dependencies]
 thiserror = "2.0.18"
-rayon = { version = "1.11", optional = true }
 cfg-if = "1.0"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+rayon = { version = "1.11", optional = true }
 
 [dev-dependencies]
 rand = "0.10.1"
