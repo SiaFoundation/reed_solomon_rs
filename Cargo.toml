@@ -21,7 +21,7 @@ crate-type = ["cdylib", "rlib"]
 default = ["parallel", "simd"]
 # Cross-shard and intra-shard parallelism via rayon. Automatically disabled on `wasm32`.
 parallel = ["dep:rayon"]
-# Runtime-dispatched AVX2 / GFNI / NEON / SIMD128 paths. Unsupported targets 
+# Runtime-dispatched AVX2 / GFNI / NEON / SIMD128 paths. Unsupported targets
 # fall through to scalar regardless of this flag.
 simd = []
 
@@ -53,3 +53,9 @@ harness = false
 #   cargo bench -p sia_reed_solomon_comparisons
 [workspace]
 members = ["comparisons", "bench-wasm"]
+
+# CPU-intensive operations are ~100x slower without
+# optimizations. WASM tests are flaky without this
+# due to ChromeDriver having a hardcoded 30s timeout.
+[profile.test]
+opt-level = 3

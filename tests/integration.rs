@@ -6,8 +6,6 @@ use sia_reed_solomon::ReedSolomon;
 // wasm-bindgen-test-runner.
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen_test::wasm_bindgen_test as test;
-#[cfg(target_arch = "wasm32")]
-wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 
 /// Klauspost-generated golden bytes at Sia's 10-of-30 / 256 B config.
 /// Layout: `[u8 data, u8 parity, u32_le size, then (data+parity)*size bytes]`.
