@@ -137,6 +137,8 @@ mod simd {
     mod tests {
         use super::super::mul;
         use super::NIBBLE_TABLES;
+        #[cfg(target_arch = "wasm32")]
+        use wasm_bindgen_test::wasm_bindgen_test as test;
 
         #[test]
         fn nibble_tables_match_mul() {
@@ -268,6 +270,8 @@ cfg_if::cfg_if! {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(target_arch = "wasm32")]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
 
     #[test]
     fn mul_table_matches_mul() {

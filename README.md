@@ -42,6 +42,33 @@ rs.reconstruct(&mut opt)?;
 The `simd128` backend needs `-C target-feature=+simd128` (via `RUSTFLAGS` or `.cargo/config.toml`). 
 Without it the build falls through to scalar.
 
+## Testing
+
+CI runs both daily and on every PR. The matrix covers all supported SIMD backends:
+
+| Job             | Runner                  | Path under test                          |
+|-----------------|-------------------------|------------------------------------------|
+| `Test SIMD (AVX2)` | c5 (Skylake-SP / Zen 2-3) | AVX2 (CPUID asserts `avx2`, `!gfni`)   |
+| `Test SIMD (GFNI)` | c7i (Sapphire Rapids)     | GFNI (CPUID asserts `gfni`)             |
+| `Test SIMD (NEON)` | c8g (Graviton 4, arm64)   | NEON (CPUID asserts `asimd`)            |
+| `Test WASM (chrome\|firefox, simd128)` | Linux | SIMD128 in headless browser  |
+| `Test WASM (chrome\|firefox, scalar)`  | Linux | Scalar fallback in headless browser |
+| `Test <os> (default\|no-simd\|scalar)` | Linux / macOS / Windows | Cartesian: `simd+parallel`, `parallel` only, neither |
+
+### Testing locally
+
+#### Native
+
+```sh
+cargo test
+```
+
+#### WASM
+
+```sh
+WASM_BINDGEN_USE_BROWSER=1 wasm-pack test --chrome --firefox --headless
+```
+
 ## Benchmarks
 
 10 data + 20 parity, 4 MiB shards, on AWS `*.4xlarge` spot runners (16 vCPU

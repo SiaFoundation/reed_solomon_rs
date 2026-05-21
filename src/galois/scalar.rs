@@ -51,6 +51,8 @@ pub(super) fn mul_slice_xor(coeff: u8, input: &[u8], out: &mut [u8]) {
 mod tests {
     use super::super::mul;
     use super::*;
+    #[cfg(target_arch = "wasm32")]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
 
     // Pins the XOR-into-out semantic. mul_slice itself is covered by
     // `mul_table_matches_mul` in galois.rs.

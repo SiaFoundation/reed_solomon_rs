@@ -80,11 +80,9 @@ fn lookup(lo: v128, hi: v128, x: v128) -> v128 {
 mod tests {
     use super::super::scalar;
     use super::*;
-    use wasm_bindgen_test::wasm_bindgen_test;
+    use wasm_bindgen_test::wasm_bindgen_test as test;
 
-    wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
-
-    #[wasm_bindgen_test]
+    #[test]
     fn matches_scalar_exhaustive() {
         let lengths = [
             0usize, 1, 7, 15, 16, 17, 31, 32, 33, 47, 48, 63, 64, 65, 100, 127, 128, 255, 256, 1024,

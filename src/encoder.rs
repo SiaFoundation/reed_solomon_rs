@@ -430,6 +430,8 @@ fn check_shards<T: AsRef<[u8]>>(shards: &[T], expected: usize) -> Result<usize> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(target_arch = "wasm32")]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
 
     fn rand_shard(seed: u8, len: usize) -> Vec<u8> {
         // Deterministic, no rand dep needed.
