@@ -147,7 +147,13 @@ jobs:
             echo "OK: '${{ matrix.disallow }}' absent"
           fi
       - name: Setup Rust
-        run: rustup update stable
+        run: |
+          # install the toolchain from scratch instead of updating
+          # fixes an issue: 
+          #   error: could not rename 'component' file from '/home/runner/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/share/doc/clippy' to '/home/runner/.rustup/tmp/011h_1rx77g7pqjl_dir/bk': Invalid cross-device link (os error 18): Invalid cross-device link (os error 18)
+          rustup self update
+          rm -rf ~/.rustup 
+          rustup toolchain install stable
       - name: Test
         run: cargo test
       - name: Test (SIMD off)
