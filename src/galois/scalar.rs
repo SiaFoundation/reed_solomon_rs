@@ -1,6 +1,5 @@
 //! Scalar fallback. Ported from klauspost's `galMulSlice` / `galMulSliceXor`:
 //! index one 256-byte row of MUL_TABLE per input byte.
-
 use super::MUL_TABLE;
 
 #[inline]
@@ -8,20 +7,29 @@ use super::MUL_TABLE;
 pub(super) fn mul_slice(coeff: u8, input: &[u8], out: &mut [u8]) {
     debug_assert_eq!(input.len(), out.len());
     let table: &[u8; 256] = &MUL_TABLE[coeff as usize];
-    let (in_chunks, in_rem) = input.as_chunks::<8>();
-    let (out_chunks, out_rem) = out.as_chunks_mut::<8>();
-    for (oc, ic) in out_chunks.iter_mut().zip(in_chunks) {
-        oc[0] = table[ic[0] as usize];
-        oc[1] = table[ic[1] as usize];
-        oc[2] = table[ic[2] as usize];
-        oc[3] = table[ic[3] as usize];
-        oc[4] = table[ic[4] as usize];
-        oc[5] = table[ic[5] as usize];
-        oc[6] = table[ic[6] as usize];
-        oc[7] = table[ic[7] as usize];
-    }
-    for (o, &x) in out_rem.iter_mut().zip(in_rem) {
-        *o = table[x as usize];
+    cfg_if::cfg_if! {
+        if #[cfg(target_arch = "wasm32")] {
+            // about 2x faster in WASM then the manually unrolled loop.
+            for (o, &x) in out.iter_mut().zip(input.iter()) {
+                *o = table[x as usize];
+            }
+        } else {
+            let (in_chunks, in_rem) = input.as_chunks::<8>();
+            let (out_chunks, out_rem) = out.as_chunks_mut::<8>();
+            for (oc, ic) in out_chunks.iter_mut().zip(in_chunks) {
+                oc[0] = table[ic[0] as usize];
+                oc[1] = table[ic[1] as usize];
+                oc[2] = table[ic[2] as usize];
+                oc[3] = table[ic[3] as usize];
+                oc[4] = table[ic[4] as usize];
+                oc[5] = table[ic[5] as usize];
+                oc[6] = table[ic[6] as usize];
+                oc[7] = table[ic[7] as usize];
+            }
+            for (o, &x) in out_rem.iter_mut().zip(in_rem) {
+                *o = table[x as usize];
+            }
+        }
     }
 }
 
@@ -30,20 +38,28 @@ pub(super) fn mul_slice(coeff: u8, input: &[u8], out: &mut [u8]) {
 pub(super) fn mul_slice_xor(coeff: u8, input: &[u8], out: &mut [u8]) {
     debug_assert_eq!(input.len(), out.len());
     let table: &[u8; 256] = &MUL_TABLE[coeff as usize];
-    let (in_chunks, in_rem) = input.as_chunks::<8>();
-    let (out_chunks, out_rem) = out.as_chunks_mut::<8>();
-    for (oc, ic) in out_chunks.iter_mut().zip(in_chunks) {
-        oc[0] ^= table[ic[0] as usize];
-        oc[1] ^= table[ic[1] as usize];
-        oc[2] ^= table[ic[2] as usize];
-        oc[3] ^= table[ic[3] as usize];
-        oc[4] ^= table[ic[4] as usize];
-        oc[5] ^= table[ic[5] as usize];
-        oc[6] ^= table[ic[6] as usize];
-        oc[7] ^= table[ic[7] as usize];
-    }
-    for (o, &x) in out_rem.iter_mut().zip(in_rem) {
-        *o ^= table[x as usize];
+    cfg_if::cfg_if! {
+        if #[cfg(target_arch = "wasm32")] {
+            for (o, &x) in out.iter_mut().zip(input.iter()) {
+                *o ^= table[x as usize];
+            }
+        } else {
+            let (in_chunks, in_rem) = input.as_chunks::<8>();
+            let (out_chunks, out_rem) = out.as_chunks_mut::<8>();
+            for (oc, ic) in out_chunks.iter_mut().zip(in_chunks) {
+                oc[0] ^= table[ic[0] as usize];
+                oc[1] ^= table[ic[1] as usize];
+                oc[2] ^= table[ic[2] as usize];
+                oc[3] ^= table[ic[3] as usize];
+                oc[4] ^= table[ic[4] as usize];
+                oc[5] ^= table[ic[5] as usize];
+                oc[6] ^= table[ic[6] as usize];
+                oc[7] ^= table[ic[7] as usize];
+            }
+            for (o, &x) in out_rem.iter_mut().zip(in_rem) {
+                *o ^= table[x as usize];
+            }
+        }
     }
 }
 
