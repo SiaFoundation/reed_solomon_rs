@@ -19,6 +19,7 @@ sia_reed_solomon = { path = "..", default-features = false }
 reed-solomon-erasure = { version = "6.0.0", default-features = false, features = ["std"] }
 criterion = { version = "0.8.2", features = ["html_reports"] }
 rand = "0.10.1"
+reed-solomon-simd = "3.1.0"
 
 [[bench]]
 name = "comparisons"

@@ -1,5 +1,6 @@
 //! Cross-crate Reed-Solomon comparison benches against `reed_solomon_erasure`
-//! (what `sia_storage` currently uses).
+//! (what `sia_storage` currently uses) and `reed_solomon_simd` (a GF(2^16)
+//! Leopard/FFT codec; encode + reconstruct only — it has no verify primitive).
 //!
 //! Lives in its own workspace member so the comparison dev-deps don't get
 //! pulled into the main crate's build. Run with:
@@ -9,6 +10,7 @@ use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_m
 use rand::rngs::StdRng;
 use rand::{RngExt, SeedableRng};
 use reed_solomon_erasure::galois_8::ReedSolomon as ReedSolomonErasure;
+use reed_solomon_simd::{ReedSolomonDecoder, ReedSolomonEncoder};
 use sia_reed_solomon::ReedSolomon;
 
 const DATA_SHARDS: usize = 10;
@@ -71,6 +73,17 @@ fn bench_encode(c: &mut Criterion) {
             );
         });
     }
+    {
+        let mut enc = ReedSolomonEncoder::new(DATA_SHARDS, PARITY_SHARDS, SHARD_SIZE).unwrap();
+        group.bench_function(BenchmarkId::new("reed_solomon_simd", &label), |b| {
+            b.iter(|| {
+                for shard in &template[..DATA_SHARDS] {
+                    enc.add_original_shard(shard).unwrap();
+                }
+                enc.encode().unwrap().recovery_iter().count()
+            });
+        });
+    }
     group.finish();
 }
 
@@ -119,6 +132,19 @@ fn bench_reconstruct(c: &mut Criterion) {
     let mut full_erasure = make_shards();
     rs_erasure.encode(&mut full_erasure).unwrap();
 
+    // Leopard recovery shards from the same input. full_rs[..DATA] is the
+    // unmodified data (encode only writes the parity tail).
+    let mut leopard_enc = ReedSolomonEncoder::new(DATA_SHARDS, PARITY_SHARDS, SHARD_SIZE).unwrap();
+    for s in &full_rs[..DATA_SHARDS] {
+        leopard_enc.add_original_shard(s).unwrap();
+    }
+    let leopard_recovery: Vec<Vec<u8>> = leopard_enc
+        .encode()
+        .unwrap()
+        .recovery_iter()
+        .map(|s| s.to_vec())
+        .collect();
+
     let slab_bytes = DATA_SHARDS as u64 * SHARD_SIZE as u64;
     group.throughput(Throughput::Bytes(slab_bytes));
 
@@ -160,6 +186,23 @@ fn bench_reconstruct(c: &mut Criterion) {
                     },
                     criterion::BatchSize::LargeInput,
                 );
+            });
+        }
+        {
+            // Provide the minimal set Leopard needs: the surviving originals
+            // plus `drop_count` recovery shards (DATA_SHARDS total), recovering
+            // the dropped data shards.
+            let mut dec = ReedSolomonDecoder::new(DATA_SHARDS, PARITY_SHARDS, SHARD_SIZE).unwrap();
+            group.bench_function(BenchmarkId::new("reed_solomon_simd", &label), |b| {
+                b.iter(|| {
+                    for i in drop_count..DATA_SHARDS {
+                        dec.add_original_shard(i, &full_rs[i]).unwrap();
+                    }
+                    for i in 0..drop_count {
+                        dec.add_recovery_shard(i, &leopard_recovery[i]).unwrap();
+                    }
+                    dec.decode().unwrap().restored_original_iter().count()
+                });
             });
         }
     }
