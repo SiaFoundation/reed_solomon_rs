@@ -1,12 +1,11 @@
 //! Cross-crate Reed-Solomon comparison benches against `reed_solomon_erasure`
-//! (what `sia_storage` currently uses) and `fec_rs` (another GF(2^8) crate).
+//! (what `sia_storage` currently uses).
 //!
 //! Lives in its own workspace member so the comparison dev-deps don't get
 //! pulled into the main crate's build. Run with:
 //!     cargo bench -p sia_reed_solomon_comparisons
 
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
-use fec_rs::ReedSolomon as FecRs;
 use rand::rngs::StdRng;
 use rand::{RngExt, SeedableRng};
 use reed_solomon_erasure::galois_8::ReedSolomon as ReedSolomonErasure;
@@ -72,19 +71,6 @@ fn bench_encode(c: &mut Criterion) {
             );
         });
     }
-    {
-        let rs = FecRs::new(DATA_SHARDS, PARITY_SHARDS).unwrap();
-        group.bench_function(BenchmarkId::new("fec_rs", &label), |b| {
-            b.iter_batched(
-                || template.clone(),
-                |mut shards| {
-                    rs.encode(&mut shards).unwrap();
-                    shards
-                },
-                criterion::BatchSize::LargeInput,
-            );
-        });
-    }
     group.finish();
 }
 
@@ -120,17 +106,6 @@ fn bench_verify(c: &mut Criterion) {
             });
         });
     }
-    {
-        let rs = FecRs::new(DATA_SHARDS, PARITY_SHARDS).unwrap();
-        let mut shards = make_shards();
-        rs.encode(&mut shards).unwrap();
-        group.bench_function(BenchmarkId::new("fec_rs", &label), |b| {
-            b.iter(|| {
-                let ok = rs.verify(&shards).unwrap();
-                assert!(ok);
-            });
-        });
-    }
     group.finish();
 }
 
@@ -138,14 +113,11 @@ fn bench_reconstruct(c: &mut Criterion) {
     let mut group = c.benchmark_group("reconstruct");
     let rs = ReedSolomon::new(DATA_SHARDS, PARITY_SHARDS).unwrap();
     let rs_erasure = ReedSolomonErasure::new(DATA_SHARDS, PARITY_SHARDS).unwrap();
-    let rs_fec = FecRs::new(DATA_SHARDS, PARITY_SHARDS).unwrap();
 
     let mut full_rs = make_shards();
     rs.encode(&mut full_rs).unwrap();
     let mut full_erasure = make_shards();
     rs_erasure.encode(&mut full_erasure).unwrap();
-    let mut full_fec = make_shards();
-    rs_fec.encode(&mut full_fec).unwrap();
 
     let slab_bytes = DATA_SHARDS as u64 * SHARD_SIZE as u64;
     group.throughput(Throughput::Bytes(slab_bytes));
@@ -184,22 +156,6 @@ fn bench_reconstruct(c: &mut Criterion) {
                     || template.clone(),
                     |mut shards| {
                         rs_erasure.reconstruct_data(&mut shards).unwrap();
-                        shards
-                    },
-                    criterion::BatchSize::LargeInput,
-                );
-            });
-        }
-        {
-            let mut template: Vec<Option<Vec<u8>>> = full_fec.iter().cloned().map(Some).collect();
-            for slot in &mut template[..drop_count] {
-                *slot = None;
-            }
-            group.bench_function(BenchmarkId::new("fec_rs", &label), |b| {
-                b.iter_batched(
-                    || template.clone(),
-                    |mut shards| {
-                        rs_fec.reconstruct_data(&mut shards).unwrap();
                         shards
                     },
                     criterion::BatchSize::LargeInput,
@@ -253,25 +209,6 @@ fn bench_reconstruct_chunked(c: &mut Criterion) {
                 *slot = None;
             }
             group.bench_function(BenchmarkId::new("reed_solomon_erasure", &label), |b| {
-                b.iter_batched(
-                    || template.clone(),
-                    |mut shards| {
-                        rs.reconstruct_data(&mut shards).unwrap();
-                        shards
-                    },
-                    criterion::BatchSize::LargeInput,
-                );
-            });
-        }
-        {
-            let rs = FecRs::new(DATA_SHARDS, PARITY_SHARDS).unwrap();
-            let mut full = make_shards_sized(shard_size);
-            rs.encode(&mut full).unwrap();
-            let mut template: Vec<Option<Vec<u8>>> = full.iter().cloned().map(Some).collect();
-            for slot in &mut template[..drop_count] {
-                *slot = None;
-            }
-            group.bench_function(BenchmarkId::new("fec_rs", &label), |b| {
                 b.iter_batched(
                     || template.clone(),
                     |mut shards| {

@@ -88,47 +88,47 @@ Reconstruct throughput is per data slab (`data_shards × shard_size`), not per b
 
 ### Comparisons
 
-`reed_solomon_erasure` is built with `simd-accel`; `fec_rs` with `parallel`.
+`reed_solomon_erasure` is built with `simd-accel`.
 
 c5.4xlarge (AVX2):
 
-| Operation                  | this       | klauspost (Go) | reed_solomon_erasure | fec_rs    |
-|----------------------------|------------|----------------|----------------------|-----------|
-| `encode`                   | 22.4 GiB/s | 37.2 GiB/s     | 1.1 GiB/s            | 6.5 GiB/s |
-| `verify`                   | 4.4 GiB/s  | 4.1 GiB/s      | 807 MiB/s            | 785 MiB/s |
-| `reconstruct -1 data lost` | 37.3 GiB/s | 29.6 GiB/s     | 6.0 GiB/s            | 5.9 GiB/s |
-| `reconstruct -10 data lost`| 7.1 GiB/s  | 3.6 GiB/s      | 592 MiB/s            | 579 MiB/s |
+| Operation                  | this       | klauspost (Go) | reed_solomon_erasure |
+|----------------------------|------------|----------------|----------------------|
+| `encode`                   | 22.4 GiB/s | 37.2 GiB/s     | 1.1 GiB/s            |
+| `verify`                   | 4.4 GiB/s  | 4.1 GiB/s      | 807 MiB/s            |
+| `reconstruct -1 data lost` | 37.3 GiB/s | 29.6 GiB/s     | 6.0 GiB/s            |
+| `reconstruct -10 data lost`| 7.1 GiB/s  | 3.6 GiB/s      | 592 MiB/s            |
 
 c7i.4xlarge (GFNI):
 
-| Operation                  | this       | klauspost (Go) | reed_solomon_erasure | fec_rs    |
-|----------------------------|------------|----------------|----------------------|-----------|
-| `encode`                   | 32.5 GiB/s | 70.5 GiB/s     | 1.6 GiB/s            | 9.7 GiB/s |
-| `verify`                   | 5.3 GiB/s  | 5.7 GiB/s      | 1.2 GiB/s            | 1.3 GiB/s |
-| `reconstruct -1 data lost` | 46.7 GiB/s | 24.4 GiB/s     | 8.1 GiB/s            | 8.8 GiB/s |
-| `reconstruct -10 data lost`| 10.5 GiB/s | 6.6 GiB/s      | 1.0 GiB/s            | 1.1 GiB/s |
+| Operation                  | this       | klauspost (Go) | reed_solomon_erasure |
+|----------------------------|------------|----------------|----------------------|
+| `encode`                   | 32.5 GiB/s | 70.5 GiB/s     | 1.6 GiB/s            |
+| `verify`                   | 5.3 GiB/s  | 5.7 GiB/s      | 1.2 GiB/s            |
+| `reconstruct -1 data lost` | 46.7 GiB/s | 24.4 GiB/s     | 8.1 GiB/s            |
+| `reconstruct -10 data lost`| 10.5 GiB/s | 6.6 GiB/s      | 1.0 GiB/s            |
 
 c7g.4xlarge (NEON, Graviton 3):
 
-| Operation                  | this       | klauspost (Go) | reed_solomon_erasure | fec_rs    |
-|----------------------------|------------|----------------|----------------------|-----------|
-| `encode`                   | 29.0 GiB/s | 49.5 GiB/s     | 1.1 GiB/s            | 2.6 GiB/s |
-| `verify`                   | 6.5 GiB/s  | 14.0 GiB/s     | 844 MiB/s            | 250 MiB/s |
-| `reconstruct -1 data lost` | 62.5 GiB/s | 90.4 GiB/s     | 6.0 GiB/s            | 1.7 GiB/s |
-| `reconstruct -10 data lost`| 10.9 GiB/s | 18.5 GiB/s     | 612 MiB/s            | 171 MiB/s |
+| Operation                  | this       | klauspost (Go) | reed_solomon_erasure |
+|----------------------------|------------|----------------|----------------------|
+| `encode`                   | 29.0 GiB/s | 49.5 GiB/s     | 1.1 GiB/s            |
+| `verify`                   | 6.5 GiB/s  | 14.0 GiB/s     | 844 MiB/s            |
+| `reconstruct -1 data lost` | 62.5 GiB/s | 90.4 GiB/s     | 6.0 GiB/s            |
+| `reconstruct -10 data lost`| 10.9 GiB/s | 18.5 GiB/s     | 612 MiB/s            |
 
 ### WASM
 
 `wasm32-unknown-unknown` with `-C target-feature=+simd128`, run under Node on the
-c7i.4xlarge host. `reed_solomon_erasure` and `fec_rs` have no wasm SIMD path, so
-they run scalar; this crate uses its SIMD128 path.
+c7i.4xlarge host. `reed_solomon_erasure` has no wasm SIMD path, so it runs
+scalar; this crate uses its SIMD128 path.
 
-| Operation                  | this      | reed_solomon_erasure | fec_rs    |
-|----------------------------|-----------|----------------------|-----------|
-| `encode`                   | 1.6 GiB/s | 205 MiB/s            | 284 MiB/s |
-| `verify`                   | 1.1 GiB/s | 194 MiB/s            | 263 MiB/s |
-| `reconstruct -1 data lost` | 2.0 GiB/s | 889 MiB/s            | 1.1 GiB/s |
-| `reconstruct -10 data lost`| 773 MiB/s | 130 MiB/s            | 176 MiB/s |
+| Operation                  | this      | reed_solomon_erasure |
+|----------------------------|-----------|----------------------|
+| `encode`                   | 1.6 GiB/s | 205 MiB/s            |
+| `verify`                   | 1.1 GiB/s | 194 MiB/s            |
+| `reconstruct -1 data lost` | 2.0 GiB/s | 889 MiB/s            |
+| `reconstruct -10 data lost`| 773 MiB/s | 130 MiB/s            |
 
 Rust benches live in [comparisons/](comparisons/) (`cargo bench -p
 sia_reed_solomon_comparisons`); the wasm comparison is in

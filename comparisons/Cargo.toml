@@ -12,12 +12,11 @@ bench = false
 [features]
 default = ["simd", "parallel"]
 simd = ["sia_reed_solomon/simd", "reed-solomon-erasure/simd-accel"]
-parallel = ["sia_reed_solomon/parallel", "fec-rs/parallel"]
+parallel = ["sia_reed_solomon/parallel"]
 
 [dev-dependencies]
 sia_reed_solomon = { path = "..", default-features = false }
 reed-solomon-erasure = { version = "6.0.0", default-features = false, features = ["std"] }
-fec-rs = { version = "0.1.0", default-features = false }
 criterion = { version = "0.8.2", features = ["html_reports"] }
 rand = "0.10.1"
 

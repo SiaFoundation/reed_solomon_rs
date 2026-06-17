@@ -1,7 +1,6 @@
 import {
     SiaHarness,
     ErasureHarness,
-    FecHarness,
 } from "./pkg/sia_reed_solomon_bench_wasm_comparison.js";
 
 const SHARD_SIZE = 4 * 1024 * 1024;
@@ -33,7 +32,6 @@ function bench(label, fn, denomBytes, minSec = 5) {
 const harnesses = [
     ["sia_reed_solomon", new SiaHarness(SHARD_SIZE)],
     ["reed_solomon_erasure", new ErasureHarness(SHARD_SIZE)],
-    ["fec_rs", new FecHarness(SHARD_SIZE)],
 ];
 
 for (const [label, h] of harnesses) {

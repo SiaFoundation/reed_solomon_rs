@@ -123,8 +123,8 @@ jobs:
           rm -rf pkg
           wasm-pack build --target nodejs --release --features simd
           node run.mjs 2>&1 | tee ../out/bench-wasm-simd.txt
-      # sia (simd128) vs reed_solomon_erasure and fec_rs, both scalar-only on
-      # wasm. Only the simd build is interesting here, so no scalar variant.
+      # sia (simd128) vs reed_solomon_erasure, which is scalar-only on wasm.
+      # Only the simd build is interesting here, so no scalar variant.
       - name: Bench (wasm32 comparison, simd128)
         working-directory: comparisons/bench-wasm
         env:
