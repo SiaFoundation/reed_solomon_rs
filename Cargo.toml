@@ -52,7 +52,7 @@ harness = false
 # Cross-crate comparison benches; run with:
 #   cargo bench -p sia_reed_solomon_comparisons
 [workspace]
-members = ["comparisons", "bench-wasm"]
+members = ["comparisons", "comparisons/bench-wasm", "bench-wasm"]
 
 # CPU-intensive operations are ~100x slower without
 # optimizations. WASM tests are flaky without this

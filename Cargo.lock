@@ -860,6 +860,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "sia_reed_solomon_bench_wasm_comparison"
+version = "0.0.0"
+dependencies = [
+ "fec-rs",
+ "reed-solomon-erasure",
+ "sia_reed_solomon",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "sia_reed_solomon_comparisons"
 version = "0.0.0"
 dependencies = [

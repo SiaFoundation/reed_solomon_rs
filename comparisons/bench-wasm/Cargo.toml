@@ -1,0 +1,21 @@
+[package]
+name = "sia_reed_solomon_bench_wasm_comparison"
+version = "0.0.0"
+edition = "2024"
+publish = false
+description = "Wasm-bindgen comparison bench harness: sia_reed_solomon vs fec_rs"
+
+[lib]
+crate-type = ["cdylib"]
+
+[features]
+default = []
+# Toggles sia_reed_solomon's simd128 path. fec_rs has no SIMD, so it is scalar
+# in every build regardless of this flag.
+simd = ["sia_reed_solomon/simd"]
+
+[dependencies]
+sia_reed_solomon = { path = "../..", default-features = false }
+fec-rs = { version = "0.1.0", default-features = false }
+reed-solomon-erasure = { version = "6.0.0", default-features = false }
+wasm-bindgen = "0.2"

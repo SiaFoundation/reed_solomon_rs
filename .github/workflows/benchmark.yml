@@ -123,6 +123,15 @@ jobs:
           rm -rf pkg
           wasm-pack build --target nodejs --release --features simd
           node run.mjs 2>&1 | tee ../out/bench-wasm-simd.txt
+      # sia (simd128) vs reed_solomon_erasure and fec_rs, both scalar-only on
+      # wasm. Only the simd build is interesting here, so no scalar variant.
+      - name: Bench (wasm32 comparison, simd128)
+        working-directory: comparisons/bench-wasm
+        env:
+          RUSTFLAGS: "-C target-feature=+simd128"
+        run: |
+          wasm-pack build --target nodejs --release --features simd
+          node run.mjs 2>&1 | tee ../../out/bench-wasm-comparison.txt
       - name: Upload
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
