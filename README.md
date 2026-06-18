@@ -141,7 +141,7 @@ sia_reed_solomon_comparisons`); the wasm comparison is in
 
 GF(2^16) crates (`reed-solomon-simd`, `reed-solomon-16`,
 `reed-solomon-novelpoly`) use FFT-based encoding that is faster with larger shard counts and produces different parity bytes. Matrix-based GF(2^8) provides higher performance for Sia's workflows and matches the data that already 
-exists on the network. Sia's default is 30 and doesn't significantly benefit from higher shard counts.
+exists on the network. Sia's default is 30 shards and the architecture doesn't significantly benefit from higher shard counts.
 
 On the c7i.4xlarge (GFNI) runner at Sia's default 10 + 20 / 4 MiB shards, the FFT-based
 GF(2^16) codecs are 5–15× slower on encode and 16–306× slower on reconstruct
