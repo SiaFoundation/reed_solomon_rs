@@ -72,17 +72,17 @@ WASM_BINDGEN_USE_BROWSER=1 wasm-pack test --chrome --firefox --headless
 ## Benchmarks
 
 10 data + 20 parity, 4 MiB shards, on AWS `*.4xlarge` spot runners (16 vCPU
-each). SIMD is the default build; "No SIMD" is `--no-default-features --features
+each). SIMD is the default build; "Scalar" is `--no-default-features --features
 parallel`. WASM is benched separately below.
 
 ### Throughput
 
-| Operation                  | AVX2 (c5.4xlarge) | GFNI (c7i.4xlarge) | NEON (c7g.4xlarge) | No SIMD (c7i.4xlarge) |
+| Operation                  | AVX2 (c5.4xlarge) | GFNI (c7i.4xlarge) | NEON (c7g.4xlarge) | Scalar (c7i.4xlarge) |
 |----------------------------|-------------------|--------------------|--------------------|-----------------------|
-| `encode`                   | 22.4 GiB/s        | 32.5 GiB/s         | 29.0 GiB/s         | 3.8 GiB/s             |
-| `verify`                   | 4.4 GiB/s         | 5.3 GiB/s          | 6.5 GiB/s          | 2.4 GiB/s             |
-| `reconstruct -1 data lost` | 37.3 GiB/s        | 46.7 GiB/s         | 62.5 GiB/s         | 15.3 GiB/s            |
-| `reconstruct -10 data lost`| 7.1 GiB/s         | 10.5 GiB/s         | 10.9 GiB/s         | 2.3 GiB/s             |
+| `encode`                   | 22.5 GiB/s        | 24.6 GiB/s         | 28.3 GiB/s         | 4.2 GiB/s             |
+| `verify`                   | 4.4 GiB/s         | 4.4 GiB/s          | 6.1 GiB/s          | 2.4 GiB/s             |
+| `reconstruct -1 data lost` | 37.6 GiB/s        | 32.9 GiB/s         | 59.1 GiB/s         | 14.9 GiB/s            |
+| `reconstruct -10 data lost`| 7.2 GiB/s         | 8.2 GiB/s          | 10.7 GiB/s         | 2.4 GiB/s             |
 
 Reconstruct throughput is per data slab (`data_shards × shard_size`), not per byte rebuilt.
 
@@ -94,28 +94,28 @@ c5.4xlarge (AVX2):
 
 | Operation                  | this       | klauspost (Go) | reed_solomon_erasure |
 |----------------------------|------------|----------------|----------------------|
-| `encode`                   | 22.4 GiB/s | 37.2 GiB/s     | 1.1 GiB/s            |
-| `verify`                   | 4.4 GiB/s  | 4.1 GiB/s      | 807 MiB/s            |
-| `reconstruct -1 data lost` | 37.3 GiB/s | 29.6 GiB/s     | 6.0 GiB/s            |
-| `reconstruct -10 data lost`| 7.1 GiB/s  | 3.6 GiB/s      | 592 MiB/s            |
+| `encode`                   | 22.5 GiB/s | 37.2 GiB/s     | 1.1 GiB/s            |
+| `verify`                   | 4.4 GiB/s  | 4.1 GiB/s      | 813 MiB/s            |
+| `reconstruct -1 data lost` | 37.6 GiB/s | 30.3 GiB/s     | 5.7 GiB/s            |
+| `reconstruct -10 data lost`| 7.2 GiB/s  | 3.8 GiB/s      | 597 MiB/s            |
 
 c7i.4xlarge (GFNI):
 
 | Operation                  | this       | klauspost (Go) | reed_solomon_erasure |
 |----------------------------|------------|----------------|----------------------|
-| `encode`                   | 32.5 GiB/s | 70.5 GiB/s     | 1.6 GiB/s            |
-| `verify`                   | 5.3 GiB/s  | 5.7 GiB/s      | 1.2 GiB/s            |
-| `reconstruct -1 data lost` | 46.7 GiB/s | 24.4 GiB/s     | 8.1 GiB/s            |
-| `reconstruct -10 data lost`| 10.5 GiB/s | 6.6 GiB/s      | 1.0 GiB/s            |
+| `encode`                   | 24.6 GiB/s | 54.7 GiB/s     | 1001 MiB/s           |
+| `verify`                   | 4.4 GiB/s  | 4.9 GiB/s      | 833 MiB/s            |
+| `reconstruct -1 data lost` | 32.9 GiB/s | 21.9 GiB/s     | 5.5 GiB/s            |
+| `reconstruct -10 data lost`| 8.2 GiB/s  | 6.2 GiB/s      | 590 MiB/s            |
 
 c7g.4xlarge (NEON, Graviton 3):
 
 | Operation                  | this       | klauspost (Go) | reed_solomon_erasure |
 |----------------------------|------------|----------------|----------------------|
-| `encode`                   | 29.0 GiB/s | 49.5 GiB/s     | 1.1 GiB/s            |
-| `verify`                   | 6.5 GiB/s  | 14.0 GiB/s     | 844 MiB/s            |
-| `reconstruct -1 data lost` | 62.5 GiB/s | 90.4 GiB/s     | 6.0 GiB/s            |
-| `reconstruct -10 data lost`| 10.9 GiB/s | 18.5 GiB/s     | 612 MiB/s            |
+| `encode`                   | 28.3 GiB/s | 48.9 GiB/s     | 1.1 GiB/s            |
+| `verify`                   | 6.1 GiB/s  | 12.9 GiB/s     | 834 MiB/s            |
+| `reconstruct -1 data lost` | 59.1 GiB/s | 75.9 GiB/s     | 5.9 GiB/s            |
+| `reconstruct -10 data lost`| 10.7 GiB/s | 18.5 GiB/s     | 593 MiB/s            |
 
 ### WASM
 
@@ -125,10 +125,10 @@ scalar; this crate uses its SIMD128 path.
 
 | Operation                  | this      | reed_solomon_erasure |
 |----------------------------|-----------|----------------------|
-| `encode`                   | 1.6 GiB/s | 205 MiB/s            |
-| `verify`                   | 1.1 GiB/s | 194 MiB/s            |
-| `reconstruct -1 data lost` | 2.0 GiB/s | 889 MiB/s            |
-| `reconstruct -10 data lost`| 773 MiB/s | 130 MiB/s            |
+| `encode`                   | 1.6 GiB/s | 209 MiB/s            |
+| `verify`                   | 1.1 GiB/s | 197 MiB/s            |
+| `reconstruct -1 data lost` | 1.7 GiB/s | 843 MiB/s            |
+| `reconstruct -10 data lost`| 711 MiB/s | 131 MiB/s            |
 
 Rust benches live in [comparisons/](comparisons/) (`cargo bench -p
 sia_reed_solomon_comparisons`); the wasm comparison is in
@@ -137,12 +137,21 @@ sia_reed_solomon_comparisons`); the wasm comparison is in
 -benchtime=5s ./...`).
 
 
-## Why only GF(2^8)?
+## Why not Leopard?
 
 GF(2^16) crates (`reed-solomon-simd`, `reed-solomon-16`,
-`reed-solomon-novelpoly`) use FFT-based encoding that is faster above ~100
-shards but slower below it, and produce different parity bytes. Sia uses up
-to 256 shards and needs to match what its client SDKs already produce.
+`reed-solomon-novelpoly`) use FFT-based encoding that is faster with larger shard counts and produces different parity bytes. Matrix-based GF(2^8) provides higher performance for Sia's workflows and matches the data that already 
+exists on the network. Sia's default is 30 and doesn't significantly benefit from higher shard counts.
+
+On the c7i.4xlarge (GFNI) runner at Sia's default 10 + 20 / 4 MiB shards, the FFT-based
+GF(2^16) codecs are 5–15× slower on encode and 16–306× slower on reconstruct
+than this crate's GF(2^8) matrix.
+
+| Operation                  | this (GF8 matrix) | reed_solomon_simd (GF16 FFT) | klauspost Leopard GF16 | klauspost Leopard GF8 |
+|----------------------------|-------------------|------------------------------|-------------------------|------------------------|
+| `encode`                   | **24.6 GiB/s**        | 1.7 GiB/s                    | 4.7 GiB/s               | 4.7 GiB/s              |
+| `reconstruct -1 data lost` | **32.9 GiB/s**        | 110 MiB/s                   | 480 MiB/s               | 596 MiB/s              |
+| `reconstruct -10 data lost`| **8.2 GiB/s**         | 109 MiB/s                   | 409 MiB/s               | 522 MiB/s              |
 
 ## License
 
