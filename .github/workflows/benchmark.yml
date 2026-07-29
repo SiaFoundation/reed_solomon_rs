@@ -51,7 +51,7 @@ jobs:
             compare: true
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Show CPU
         run: |
           uname -a
@@ -61,7 +61,7 @@ jobs:
         run: rustup update stable
       - name: Setup Go
         if: matrix.compare
-        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: comparisons/klauspost-go/go.mod
       - name: Prepare output dir
@@ -96,7 +96,7 @@ jobs:
     name: WASM (Node / c7i.4xlarge)
     runs-on: runs-on=${{ github.run_id }}/family=c7i.4xlarge/image=ubuntu24-full-x64
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Show CPU
         run: |
           uname -a
