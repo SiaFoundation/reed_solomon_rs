@@ -377,7 +377,16 @@ fn process_block<'a, O: AsMut<[&'a mut [u8]]>>(
     inputs: &[&[u8]],
     mut outputs: O,
 ) {
-    for (r, out_chunk) in outputs.as_mut().iter_mut().enumerate() {
+    let outs = outputs.as_mut();
+    if let Some(first) = inputs.first() {
+        let len = first.len();
+        assert!(
+            inputs.iter().all(|s| s.len() == len) && outs.iter().all(|s| s.len() == len),
+            "process_block requires every input and output to have the same length"
+        );
+    }
+
+    for (r, out_chunk) in outs.iter_mut().enumerate() {
         let coeffs = &matrix_rows[r];
         let mut wrote = false;
         for (c, &in_chunk) in inputs.iter().enumerate() {
