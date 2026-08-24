@@ -5,7 +5,7 @@ use super::MUL_TABLE;
 #[inline]
 #[allow(dead_code)]
 pub(super) fn mul_slice(coeff: u8, input: &[u8], out: &mut [u8]) {
-    debug_assert_eq!(input.len(), out.len());
+    assert_eq!(input.len(), out.len());
     let table: &[u8; 256] = &MUL_TABLE[coeff as usize];
     cfg_if::cfg_if! {
         if #[cfg(target_arch = "wasm32")] {
@@ -36,7 +36,7 @@ pub(super) fn mul_slice(coeff: u8, input: &[u8], out: &mut [u8]) {
 #[inline]
 #[allow(dead_code)]
 pub(super) fn mul_slice_xor(coeff: u8, input: &[u8], out: &mut [u8]) {
-    debug_assert_eq!(input.len(), out.len());
+    assert_eq!(input.len(), out.len());
     let table: &[u8; 256] = &MUL_TABLE[coeff as usize];
     cfg_if::cfg_if! {
         if #[cfg(target_arch = "wasm32")] {

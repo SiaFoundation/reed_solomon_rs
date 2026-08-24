@@ -109,28 +109,24 @@ mod simd {
         mut one: impl FnMut(*const u8, *mut u8),
         tail: impl FnOnce(&[u8], &mut [u8]),
     ) {
-        debug_assert_eq!(input.len(), out.len());
-        let stride = VEC * UNROLL;
+        assert_eq!(input.len(), out.len());
 
-        let mut in_u = input.chunks_exact(stride);
-        let mut out_u = out.chunks_exact_mut(stride);
-        for (in_block, out_block) in (&mut in_u).zip(&mut out_u) {
-            let p_in = in_block.as_ptr();
-            let p_out = out_block.as_mut_ptr();
+        let (in_v, in_rem) = input.as_chunks::<VEC>();
+        let (out_v, out_rem) = out.as_chunks_mut::<VEC>();
+        let (in_u, in_s) = in_v.as_chunks::<UNROLL>();
+        let (out_u, out_s) = out_v.as_chunks_mut::<UNROLL>();
+
+        for (in_block, out_block) in in_u.iter().zip(out_u) {
             for k in 0..UNROLL {
-                // SAFETY: chunks_exact returned exactly VEC*UNROLL bytes.
-                let off = k * VEC;
-                one(unsafe { p_in.add(off) }, unsafe { p_out.add(off) });
+                one(in_block[k].as_ptr(), out_block[k].as_mut_ptr());
             }
         }
 
-        let mut in_s = in_u.remainder().chunks_exact(VEC);
-        let mut out_s = out_u.into_remainder().chunks_exact_mut(VEC);
-        for (in_block, out_block) in (&mut in_s).zip(&mut out_s) {
+        for (in_block, out_block) in in_s.iter().zip(out_s) {
             one(in_block.as_ptr(), out_block.as_mut_ptr());
         }
 
-        tail(in_s.remainder(), out_s.into_remainder());
+        tail(in_rem, out_rem);
     }
 
     #[cfg(test)]
@@ -197,7 +193,7 @@ cfg_if::cfg_if! {
         mod gfni;
 
         pub(crate) fn mul_slice(coeff: u8, input: &[u8], out: &mut [u8]) {
-            debug_assert_eq!(input.len(), out.len());
+            assert_eq!(input.len(), out.len());
             unsafe {
                 if is_x86_feature_detected!("gfni")
                     && is_x86_feature_detected!("avx2")
@@ -212,7 +208,7 @@ cfg_if::cfg_if! {
         }
 
         pub(crate) fn mul_slice_xor(coeff: u8, input: &[u8], out: &mut [u8]) {
-            debug_assert_eq!(input.len(), out.len());
+            assert_eq!(input.len(), out.len());
             unsafe {
                 if is_x86_feature_detected!("gfni") && is_x86_feature_detected!("avx2") {
                     return gfni::mul_slice_xor(coeff, input, out);
@@ -230,12 +226,12 @@ cfg_if::cfg_if! {
         mod neon;
 
         pub(crate) fn mul_slice(coeff: u8, input: &[u8], out: &mut [u8]) {
-            debug_assert_eq!(input.len(), out.len());
+            assert_eq!(input.len(), out.len());
             neon::mul_slice(coeff, input, out)
         }
 
         pub(crate) fn mul_slice_xor(coeff: u8, input: &[u8], out: &mut [u8]) {
-            debug_assert_eq!(input.len(), out.len());
+            assert_eq!(input.len(), out.len());
             neon::mul_slice_xor(coeff, input, out)
         }
     } else if #[cfg(all(
@@ -246,22 +242,22 @@ cfg_if::cfg_if! {
         mod wasm;
 
         pub(crate) fn mul_slice(coeff: u8, input: &[u8], out: &mut [u8]) {
-            debug_assert_eq!(input.len(), out.len());
+            assert_eq!(input.len(), out.len());
             wasm::mul_slice(coeff, input, out)
         }
 
         pub(crate) fn mul_slice_xor(coeff: u8, input: &[u8], out: &mut [u8]) {
-            debug_assert_eq!(input.len(), out.len());
+            assert_eq!(input.len(), out.len());
             wasm::mul_slice_xor(coeff, input, out)
         }
     } else {
         pub(crate) fn mul_slice(coeff: u8, input: &[u8], out: &mut [u8]) {
-            debug_assert_eq!(input.len(), out.len());
+            assert_eq!(input.len(), out.len());
             scalar::mul_slice(coeff, input, out)
         }
 
         pub(crate) fn mul_slice_xor(coeff: u8, input: &[u8], out: &mut [u8]) {
-            debug_assert_eq!(input.len(), out.len());
+            assert_eq!(input.len(), out.len());
             scalar::mul_slice_xor(coeff, input, out)
         }
     }
