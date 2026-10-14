@@ -85,7 +85,7 @@ jobs:
           go mod tidy
           go test -bench . -benchtime=5s ./... 2>&1 | tee ../../out/bench-klauspost-go.txt
       - name: Upload
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: bench-${{ matrix.slug }}
           path: out/
@@ -133,7 +133,7 @@ jobs:
           wasm-pack build --target nodejs --release --features simd
           node run.mjs 2>&1 | tee ../../out/bench-wasm-comparison.txt
       - name: Upload
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: bench-wasm-c7i-4xlarge
           path: out/
@@ -143,7 +143,7 @@ jobs:
     needs: [bench, wasm]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/upload-artifact/merge@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact/merge@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: bench
           pattern: bench-*
